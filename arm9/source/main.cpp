@@ -1,97 +1,127 @@
 #include <nds.h>
-#include <dirent.h>
-#include <cstdio>
+#include <ctime>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "common/systemdetails.h"
-#include "core/NdsHeader.h"
-#include "core/Text.h"
+#include "core/LibraryScan.h"
 #include "launch/TwilightLauncher.h"
 #include "my_gurumeditation.h"
+#include "platform/RomFiles.h"
+#include "platform/Screens.h"
+#include "platform/Storage.h"
+#include "ui/App.h"
+#include "ui/Views.h"
 
 // Read by TWiLight's twlmenusettings.cpp; normally defined in universal/arm9/source/mainAll.cpp.
 bool useTwlCfg = false;
 
 namespace {
 
-constexpr const char* kRomRoot = "sd:/roms/NDS";
-constexpr size_t kMaxRoms = 50;
-constexpr int kMaxDepth = 4;
-constexpr size_t kVisibleRows = 22;
-constexpr size_t kNameColumns = 30;
+using namespace dscore;
 
-PrintConsole topScreen;
-PrintConsole bottomScreen;
+const std::vector<std::string> kRomRoots = {"sd:/roms/NDS", "sd:/roms/GBA"};
+constexpr int kConfigSaveDelayFrames = 120; // batch cursor moves into one SD write
+constexpr size_t kProgressEvery = 8;        // redraw the indexing screen every few games
 
-void scanDir(const std::string& dir, int depth, std::vector<std::string>& out) {
-	if (depth > kMaxDepth || out.size() >= kMaxRoms) return;
-	DIR* d = opendir(dir.c_str());
-	if (!d) return;
-	while (dirent* entry = readdir(d)) {
-		if (out.size() >= kMaxRoms) break;
-		if (entry->d_name[0] == '.') continue;
-		const std::string path = dir + "/" + entry->d_name;
-		if (entry->d_type == DT_DIR) {
-			scanDir(path, depth + 1, out);
-		} else if (dscore::hasExtension(entry->d_name, ".nds")) {
-			out.push_back(path);
+// Milliseconds since boot, from the cascaded timers started in main().
+unsigned elapsedMs() {
+	return timerTicks2msec(cpuGetTiming());
+}
+
+void showMessage(Screens& screens, const std::string& topTitle, const std::vector<std::string>& topLines,
+	const std::string& bottomTitle, const std::vector<std::string>& bottomLines) {
+	drawMessageScreen(screens.top(), topTitle, topLines);
+	drawMessageScreen(screens.bottom(), bottomTitle, bottomLines);
+	screens.present();
+}
+
+[[noreturn]] void halt(Screens& screens, const std::string& title, const std::vector<std::string>& lines) {
+	showMessage(screens, "DSCore", {}, title, lines);
+	while (true) swiWaitForVBlank();
+}
+
+BannerLanguage systemLanguage() {
+	const int language = PersonalData->language;
+	return language <= int(BannerLanguage::Spanish) ? BannerLanguage(language) : BannerLanguage::English;
+}
+
+// Loads the cached library and brings it up to date with the SD card, showing progress while new
+// games are indexed. Appends timings to log.
+LibraryData loadLibrary(Screens& screens, std::string& log) {
+	LibraryData library;
+	unsigned start = elapsedMs();
+	const bool cached = storage::loadLibrary(library);
+	log += "cache: " + std::string(cached ? "loaded" : "missing") + ", " + std::to_string(library.games.size()) +
+	       " games, " + std::to_string(elapsedMs() - start) + " ms\n";
+
+	start = elapsedMs();
+	const std::vector<std::string> files = listRomFiles(kRomRoots);
+	log += "list: " + std::to_string(files.size()) + " files, " + std::to_string(elapsedMs() - start) + " ms\n";
+
+	std::set<std::string> known;
+	for (const GameEntry& game : library.games) known.insert(game.path);
+	size_t toIndex = 0;
+	for (const std::string& path : files) toIndex += known.count(path) ? 0 : 1;
+
+	start = elapsedMs();
+	size_t indexed = 0;
+	const BannerLanguage language = systemLanguage();
+	const bool changed = applyScan(library, files, [&](const std::string& path, GameEntry& game, std::optional<NdsIcon>& icon) {
+		if (indexed % kProgressEvery == 0) {
+			const std::string progress = std::to_string(indexed + 1) + " / " + std::to_string(toIndex);
+			showMessage(screens, "DSCore", {"Building your library"}, "Indexing games", {progress, path.substr(path.find_last_of('/') + 1)});
 		}
+		++indexed;
+		return readRomInfo(path, language, game, icon);
+	});
+	log += "index: " + std::to_string(indexed) + " new, " + std::to_string(elapsedMs() - start) + " ms\n";
+
+	if (changed && !storage::saveLibrary(library)) log += "cache: write failed\n";
+	return library;
+}
+
+// Translates this frame's buttons and touch into actions; returns a ROM path when one should launch.
+std::string handleInput(App& app) {
+	scanKeys();
+	const u32 down = keysDown();
+	const u32 repeat = keysDownRepeat();
+	std::string launch;
+	auto apply = [&](Action action, int x = 0, int y = 0) {
+		const std::string path = app.handle(action, x, y);
+		if (!path.empty()) launch = path;
+	};
+
+	if (repeat & KEY_UP) apply(Action::Up);
+	if (repeat & KEY_DOWN) apply(Action::Down);
+	if (repeat & KEY_LEFT) apply(Action::Left);
+	if (repeat & KEY_RIGHT) apply(Action::Right);
+	if (down & KEY_A) apply(Action::Launch);
+	if (down & KEY_Y) apply(Action::Favorite);
+	if (down & KEY_L) apply(Action::PrevTab);
+	if (down & KEY_R) apply(Action::NextTab);
+	if (down & KEY_SELECT) apply(Action::ToggleView);
+	if (down & KEY_START) apply(Action::CycleSort);
+	if (down & KEY_TOUCH) {
+		touchPosition touch;
+		touchRead(&touch);
+		apply(Action::Tap, touch.px, touch.py);
 	}
-	closedir(d);
+	return launch;
 }
 
-std::string readTitle(const std::string& path) {
-	FILE* f = fopen(path.c_str(), "rb");
-	if (!f) return "(cannot open file)";
-	std::string title;
-	uint8_t header[dscore::kNdsHeaderSize];
-	dscore::NdsHeaderInfo info;
-	if (fread(header, 1, sizeof(header), f) == sizeof(header)
-		&& dscore::parseNdsHeader(header, sizeof(header), info) && info.bannerOffset != 0) {
-		static uint8_t banner[dscore::kBannerTitlesEnd];
-		if (fseek(f, info.bannerOffset, SEEK_SET) == 0 && fread(banner, 1, sizeof(banner), f) == sizeof(banner)) {
-			title = dscore::bannerTitle(banner, sizeof(banner), dscore::BannerLanguage::English);
-		}
-	}
-	fclose(f);
-	return title.empty() ? "(no banner title)" : title;
-}
+void launch(Screens& screens, App& app, UserData& userData, Config& config, const std::string& path) {
+	userData.recordLaunch(path, uint32_t(time(nullptr)));
+	storage::saveUserData(userData);
+	config.selectedPath = path;
+	storage::saveConfig(config);
 
-std::string fileName(const std::string& path) {
-	const size_t slash = path.rfind('/');
-	return slash == std::string::npos ? path : path.substr(slash + 1);
-}
-
-void drawTop(const std::string& path, const std::string& title, unsigned scanMs, size_t count) {
-	consoleSelect(&topScreen);
-	consoleClear();
-	iprintf("DSCore - Milestone 1\n\n");
-	iprintf("DSi mode: %s\n", isDSiMode() ? "yes" : "no");
-	iprintf("Scan: %u ms (%u ROMs)\n\n", scanMs, unsigned(count));
-	if (path.empty()) {
-		iprintf("No .nds found in %s\n", kRomRoot);
-		return;
-	}
-	iprintf("Title:\n%s\n\n", dscore::asciiForConsole(title).c_str());
-	iprintf("File:\n%s\n\n", dscore::asciiForConsole(path).c_str());
-	iprintf("A: play   Up/Down: move\n");
-}
-
-void drawList(const std::vector<std::string>& roms, size_t cursor) {
-	consoleSelect(&bottomScreen);
-	consoleClear();
-	iprintf("%s (%u)\n", kRomRoot, unsigned(roms.size()));
-	size_t first = cursor > kVisibleRows / 2 ? cursor - kVisibleRows / 2 : 0;
-	if (first + kVisibleRows > roms.size()) first = roms.size() > kVisibleRows ? roms.size() - kVisibleRows : 0;
-	for (size_t i = first; i < roms.size() && i < first + kVisibleRows; ++i) {
-		std::string name = dscore::asciiForConsole(fileName(roms[i]));
-		if (name.size() > kNameColumns) name.resize(kNameColumns);
-		iprintf("%c%s\n", i == cursor ? '>' : ' ', name.c_str());
-	}
-}
-
-void waitForB() {
+	const GameEntry* game = app.selected();
+	showMessage(screens, "Starting", {game ? game->title : path}, "", {"Loading through TWiLight Menu++..."});
+	int code = 0;
+	const LaunchError error = launchViaTwilight(path, &code);
+	showMessage(screens, "Could not start the game", {describe(error), "code " + std::to_string(code)}, "", {"Press B to go back"});
 	do {
 		swiWaitForVBlank();
 		scanKeys();
@@ -103,58 +133,47 @@ void waitForB() {
 int main(int argc, char** argv) {
 	myExceptionHandler();
 	fifoSendValue32(FIFO_PM, PM_REQ_SLEEP_DISABLE);
+	cpuStartTiming(0);
 	sys().initFilesystem(argc > 0 ? argv[0] : "sd:/dscore.nds");
 	sys().initArm7RegStatuses();
 
 	// main.srldr fades both screens to white before booting its theme and leaves the fade-in to it.
 	setBrightness(3, 0);
+	Screens screens;
+	if (!sys().fatInitOk()) halt(screens, "SD card not found", {"DSCore needs the DSi SD card."});
+	showMessage(screens, "DSCore", {"Loading..."}, "", {});
+	storage::ensureDataDir();
 
-	videoSetMode(MODE_0_2D);
-	videoSetModeSub(MODE_0_2D);
-	vramSetBankA(VRAM_A_MAIN_BG);
-	vramSetBankC(VRAM_C_SUB_BG);
-	consoleInit(&topScreen, 3, BgType_Text4bpp, BgSize_T_256x256, 31, 0, true, true);
-	consoleInit(&bottomScreen, 3, BgType_Text4bpp, BgSize_T_256x256, 31, 0, false, true);
+	std::string log = "DSCore boot\n";
+	Config config = storage::loadConfig();
+	UserData userData = storage::loadUserData();
+	const LibraryData library = loadLibrary(screens, log);
+	log += "ready: " + std::to_string(elapsedMs()) + " ms since start\n";
+	storage::writeBootLog(log);
 
-	if (!sys().fatInitOk()) {
-		consoleSelect(&topScreen);
-		iprintf("FAT init failed\n");
-		while (true) swiWaitForVBlank();
-	}
-
-	std::vector<std::string> roms;
-	cpuStartTiming(0);
-	scanDir(kRomRoot, 0, roms);
-	const unsigned scanMs = timerTicks2msec(cpuEndTiming());
-
-	size_t cursor = 0;
-	auto refresh = [&]() {
-		drawList(roms, cursor);
-		const std::string path = roms.empty() ? std::string() : roms[cursor];
-		drawTop(path, path.empty() ? std::string() : readTitle(path), scanMs, roms.size());
-	};
-	refresh();
-
+	App app(library, userData, config);
 	keysSetRepeat(15, 4);
+	int configSaveCountdown = -1;
 	while (true) {
-		swiWaitForVBlank();
-		scanKeys();
-		if (roms.empty()) continue;
-		const u32 repeat = keysDownRepeat();
-		if ((repeat & KEY_DOWN) && cursor + 1 < roms.size()) {
-			++cursor;
-			refresh();
-		} else if ((repeat & KEY_UP) && cursor > 0) {
-			--cursor;
-			refresh();
-		} else if (keysDown() & KEY_A) {
-			consoleSelect(&topScreen);
-			iprintf("\nLaunching...\n");
-			int code = 0;
-			const dscore::LaunchError err = dscore::launchViaTwilight(roms[cursor], &code);
-			iprintf("Failed: %s (code %d)\nB: back\n", dscore::describe(err), code);
-			waitForB();
-			refresh();
+		const std::string path = handleInput(app);
+		if (!path.empty()) {
+			launch(screens, app, userData, config, path);
+			configSaveCountdown = -1;
+			app.drawTop(screens.top());
+			app.drawBottom(screens.bottom());
+			screens.present();
+			continue;
+		}
+		if (app.takeUserDataChanged()) storage::saveUserData(userData);
+		if (app.takeConfigChanged()) configSaveCountdown = kConfigSaveDelayFrames;
+		if (configSaveCountdown > 0 && --configSaveCountdown == 0) storage::saveConfig(config);
+
+		if (app.takeRedraw()) {
+			app.drawTop(screens.top());
+			app.drawBottom(screens.bottom());
+			screens.present();
+		} else {
+			swiWaitForVBlank();
 		}
 	}
 }
