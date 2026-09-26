@@ -17,6 +17,7 @@ struct GameEntry {
 	System system = System::Nds;
 	std::string gameCode; // 4 characters, empty when unknown
 	uint32_t fileSize = 0;
+	int32_t iconIndex = -1; // index into LibraryData::icons, -1 when the game has no icon
 };
 
 enum class Tab : uint8_t { All, Favorites, Nds, Gba, Recent };
