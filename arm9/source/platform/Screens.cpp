@@ -26,13 +26,36 @@ Screens::Screens()
 	lcdMainOnTop();
 }
 
+namespace {
+
+struct RowSpan {
+	bool dirty = false;
+	int first = 0;
+	int last = 0;
+};
+
+RowSpan dirtyRows(Canvas& canvas, uint16_t* buffer) {
+	RowSpan span;
+	span.dirty = canvas.takeDirtyRows(span.first, span.last);
+	if (span.dirty) DC_FlushRange(buffer + span.first * layout::kScreenW, (span.last - span.first) * layout::kScreenW * 2);
+	return span;
+}
+
+// The 256x256 bitmaps have the same row stride as the 256-pixel-wide buffers.
+void copyRows(const RowSpan& span, const uint16_t* buffer, uint16_t* vram) {
+	if (!span.dirty) return;
+	const size_t offset = size_t(span.first) * layout::kScreenW;
+	dmaCopy(buffer + offset, vram + offset, size_t(span.last - span.first) * layout::kScreenW * 2);
+}
+
+} // namespace
+
 void Screens::present() {
-	DC_FlushRange(topBuffer, sizeof(topBuffer));
-	DC_FlushRange(bottomBuffer, sizeof(bottomBuffer));
+	const RowSpan top = dirtyRows(top_, topBuffer);
+	const RowSpan bottom = dirtyRows(bottom_, bottomBuffer);
 	swiWaitForVBlank();
-	// The 256x256 bitmaps have the same row stride as the 256-pixel-wide buffers.
-	dmaCopy(topBuffer, topVram_, sizeof(topBuffer));
-	dmaCopy(bottomBuffer, bottomVram_, sizeof(bottomBuffer));
+	copyRows(top, topBuffer, topVram_);
+	copyRows(bottom, bottomBuffer, bottomVram_);
 }
 
 } // namespace dscore
