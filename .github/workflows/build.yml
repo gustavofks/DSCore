@@ -1,0 +1,26 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same toolchain image as tools/dk.ps1.
+      - name: Build toolchain image
+        run: docker build -t dscore-dev .
+
+      - name: Host tests
+        run: docker run --rm -v "$PWD:/project" -w /project dscore-dev make -C tests
+
+      - name: Build dscore.nds
+        run: docker run --rm -v "$PWD:/project" -w /project dscore-dev make
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dscore
+          path: dscore.nds
