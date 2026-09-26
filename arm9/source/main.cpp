@@ -113,6 +113,24 @@ std::string handleInput(App& app) {
 	return launch;
 }
 
+// Drawing cost of the frames since boot, logged before each launch.
+struct DrawStats {
+	unsigned frames = 0;
+	unsigned totalMs = 0;
+	unsigned maxMs = 0;
+
+	void add(unsigned ms) {
+		++frames;
+		totalMs += ms;
+		if (ms > maxMs) maxMs = ms;
+	}
+	std::string summary() const {
+		if (frames == 0) return "redraws: none\n";
+		return "redraws: " + std::to_string(frames) + ", avg " + std::to_string(totalMs / frames) + " ms, max " +
+		       std::to_string(maxMs) + " ms\n";
+	}
+};
+
 void launch(Screens& screens, App& app, UserData& userData, Config& config, const std::string& path) {
 	userData.recordLaunch(path, uint32_t(time(nullptr)));
 	storage::saveUserData(userData);
@@ -164,6 +182,7 @@ int main(int argc, char** argv) {
 
 	keysSetRepeat(15, 4);
 	int configSaveCountdown = -1;
+	DrawStats drawStats;
 	while (true) {
 		if (powerButtonPressed()) {
 			if (configSaveCountdown > 0) storage::saveConfig(config);
@@ -171,11 +190,10 @@ int main(int argc, char** argv) {
 		}
 		const std::string path = handleInput(app);
 		if (!path.empty()) {
+			storage::appendLog(drawStats.summary());
 			launch(screens, app, userData, config, path);
 			configSaveCountdown = -1;
-			app.drawTop(screens.top());
-			app.drawBottom(screens.bottom());
-			screens.present();
+			app.invalidate();
 			continue;
 		}
 		if (app.takeUserDataChanged()) storage::saveUserData(userData);
@@ -183,8 +201,10 @@ int main(int argc, char** argv) {
 		if (configSaveCountdown > 0 && --configSaveCountdown == 0) storage::saveConfig(config);
 
 		if (app.takeRedraw()) {
+			const unsigned start = elapsedMs();
 			app.drawTop(screens.top());
 			app.drawBottom(screens.bottom());
+			drawStats.add(elapsedMs() - start);
 			screens.present();
 		} else {
 			swiWaitForVBlank();
