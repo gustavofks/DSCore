@@ -13,6 +13,8 @@ enum class BannerLanguage : int { Japanese = 0, English = 1, French = 2, German 
 
 struct NdsHeaderInfo {
 	std::string gameCode;      // 4 characters, e.g. "ASMA"
+	uint32_t arm9Offset = 0;   // file offset of the ARM9 binary
+	uint32_t arm9Size = 0;
 	uint32_t bannerOffset = 0; // 0 when the ROM has no banner
 };
 

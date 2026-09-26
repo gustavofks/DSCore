@@ -34,3 +34,25 @@ TEST_CASE("relaunchKeys for a GBA game uses GBARunner2") {
 TEST_CASE("relaunchKeys is empty for unsupported files") {
 	CHECK(relaunchKeys("sd:/roms/GBA/Metroid.sav").empty());
 }
+
+TEST_CASE("usesRsetMarker finds the 'RSET' constant anywhere in the ARM9 binary") {
+	const std::string start = std::string("RSET") + std::string(16, '\0');
+	const std::string middle = std::string(8, '\x11') + "RSET" + std::string(8, '\x22');
+	const std::string end = std::string(16, '\0') + "RSET";
+	CHECK(usesRsetMarker(reinterpret_cast<const uint8_t*>(start.data()), start.size()));
+	CHECK(usesRsetMarker(reinterpret_cast<const uint8_t*>(middle.data()), middle.size()));
+	CHECK(usesRsetMarker(reinterpret_cast<const uint8_t*>(end.data()), end.size()));
+}
+
+TEST_CASE("usesRsetMarker is false without the full constant") {
+	const std::string partial = std::string(16, '\0') + "RSE";
+	const std::string other = "RESET RSEX TESR";
+	CHECK_FALSE(usesRsetMarker(reinterpret_cast<const uint8_t*>(partial.data()), partial.size()));
+	CHECK_FALSE(usesRsetMarker(reinterpret_cast<const uint8_t*>(other.data()), other.size()));
+	CHECK_FALSE(usesRsetMarker(nullptr, 0));
+}
+
+TEST_CASE("relaunchMarker matches the protocol of the installed main.srldr") {
+	CHECK(relaunchMarker(true) == 0x54455352u);
+	CHECK(relaunchMarker(false) == 0u);
+}

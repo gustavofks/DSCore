@@ -43,6 +43,20 @@ TEST_CASE("parseNdsHeader reads game code and banner offset") {
 	CHECK(info.bannerOffset == 0x00A1B200u);
 }
 
+TEST_CASE("parseNdsHeader reads the ARM9 binary location") {
+	auto h = makeHeader("SRLA", 0);
+	const uint32_t offset = 0x4000;
+	const uint32_t size = 0x7D590;
+	for (int i = 0; i < 4; ++i) {
+		h[0x20 + i] = uint8_t(offset >> (8 * i));
+		h[0x2C + i] = uint8_t(size >> (8 * i));
+	}
+	NdsHeaderInfo info;
+	REQUIRE(parseNdsHeader(h.data(), h.size(), info));
+	CHECK(info.arm9Offset == offset);
+	CHECK(info.arm9Size == size);
+}
+
 TEST_CASE("parseNdsHeader rejects short buffers") {
 	auto h = makeHeader("ASMA", 0x1000);
 	NdsHeaderInfo info;

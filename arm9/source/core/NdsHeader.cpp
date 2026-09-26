@@ -7,6 +7,8 @@ namespace dscore {
 namespace {
 
 constexpr size_t kGameCodeOffset = 0x0C;
+constexpr size_t kArm9OffsetField = 0x20;
+constexpr size_t kArm9SizeField = 0x2C;
 constexpr size_t kBannerOffsetField = 0x68;
 constexpr size_t kTitlesOffset = 0x240;
 constexpr size_t kTitleBytes = 0x100; // 128 UTF-16 code units
@@ -24,6 +26,8 @@ uint32_t readU32(const uint8_t* p) {
 bool parseNdsHeader(const uint8_t* header, size_t len, NdsHeaderInfo& out) {
 	if (len < kNdsHeaderSize) return false;
 	out.gameCode.assign(reinterpret_cast<const char*>(header + kGameCodeOffset), 4);
+	out.arm9Offset = readU32(header + kArm9OffsetField);
+	out.arm9Size = readU32(header + kArm9SizeField);
 	out.bannerOffset = readU32(header + kBannerOffsetField);
 	return true;
 }
