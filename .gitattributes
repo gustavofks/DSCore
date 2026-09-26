@@ -1,0 +1,10 @@
+# Sources are built inside a Linux container: keep LF everywhere.
+* text=auto eol=lf
+
+# Windows-only scripts
+*.ps1 text eol=crlf
+
+# Binary assets
+*.bmp binary
+*.png binary
+*.bin binary
