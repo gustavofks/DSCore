@@ -106,6 +106,9 @@ int main(int argc, char** argv) {
 	sys().initFilesystem(argc > 0 ? argv[0] : "sd:/dscore.nds");
 	sys().initArm7RegStatuses();
 
+	// main.srldr fades both screens to white before booting its theme and leaves the fade-in to it.
+	setBrightness(3, 0);
+
 	videoSetMode(MODE_0_2D);
 	videoSetModeSub(MODE_0_2D);
 	vramSetBankA(VRAM_A_MAIN_BG);
