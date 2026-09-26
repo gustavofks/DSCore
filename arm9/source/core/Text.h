@@ -17,4 +17,7 @@ bool hasExtension(std::string_view name, std::string_view ext);
 // Replaces every non-ASCII character (a whole UTF-8 sequence) with '?', for the libnds text console.
 std::string asciiForConsole(std::string_view utf8);
 
+// "YYYY-MM-DD" for seconds since 1970-01-01 (the DS RTC keeps local time, so no time zone applies).
+std::string formatDate(uint32_t secondsSinceEpoch);
+
 } // namespace dscore

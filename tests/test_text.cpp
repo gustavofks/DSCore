@@ -56,3 +56,9 @@ TEST_CASE("asciiForConsole replaces each non-ASCII character with one '?'") {
 	CHECK(asciiForConsole("\xE3\x83\x9E\xE3\x83\xAA") == "??");
 	CHECK(asciiForConsole("Mario Kart DS") == "Mario Kart DS");
 }
+
+TEST_CASE("formatDate converts seconds since the epoch to a calendar date") {
+	CHECK(formatDate(0) == "1970-01-01");
+	CHECK(formatDate(951782400) == "2000-02-29");
+	CHECK(formatDate(1790380800) == "2026-09-26");
+}

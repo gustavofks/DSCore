@@ -37,8 +37,9 @@ public:
 	// Copies an ARGB1555 image, skipping pixels without bit 15, with each pixel scaled to scale x scale.
 	void blit(const uint16_t* src, int srcW, int srcH, int x, int y, int scale = 1);
 
-	// Draws text with its top-left corner at (x, y); returns the width drawn.
-	int drawText(const Font& font, int x, int y, std::string_view text, uint16_t color);
+	// Draws text with its top-left corner at (x, y), each font pixel scaled to scale x scale; returns the
+	// width drawn.
+	int drawText(const Font& font, int x, int y, std::string_view text, uint16_t color, int scale = 1);
 
 private:
 	void set(int x, int y, uint16_t color) {

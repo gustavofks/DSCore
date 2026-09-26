@@ -33,16 +33,19 @@ void Canvas::blit(const uint16_t* src, int srcW, int srcH, int x, int y, int sca
 	}
 }
 
-int Canvas::drawText(const Font& font, int x, int y, std::string_view text, uint16_t color) {
+int Canvas::drawText(const Font& font, int x, int y, std::string_view text, uint16_t color, int scale) {
 	int penX = x;
 	for (uint32_t cp : decodeUtf8(text)) {
 		const uint8_t* rows = font.glyph(cp);
 		for (int row = 0; row < font.height; ++row) {
 			for (int col = 0; col < font.width; ++col) {
-				if (rows[row] & (0x80 >> col)) set(penX + col, y + row, color);
+				if (!(rows[row] & (0x80 >> col))) continue;
+				for (int dy = 0; dy < scale; ++dy) {
+					for (int dx = 0; dx < scale; ++dx) set(penX + col * scale + dx, y + row * scale + dy, color);
+				}
 			}
 		}
-		penX += font.width;
+		penX += font.width * scale;
 	}
 	return penX - x;
 }
