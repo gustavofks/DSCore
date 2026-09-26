@@ -1,5 +1,7 @@
 #include "core/Text.h"
 
+#include <cstdio>
+
 namespace dscore {
 
 namespace {
@@ -70,6 +72,23 @@ std::string asciiForConsole(std::string_view utf8) {
 		}
 	}
 	return out;
+}
+
+std::string formatDate(uint32_t secondsSinceEpoch) {
+	// Civil-from-days (Howard Hinnant), valid for every uint32_t input.
+	const int64_t z = int64_t(secondsSinceEpoch / 86400) + 719468;
+	const int64_t era = z / 146097;
+	const int64_t doe = z - era * 146097;
+	const int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+	const int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+	const int64_t mp = (5 * doy + 2) / 153;
+	const int64_t day = doy - (153 * mp + 2) / 5 + 1;
+	const int64_t month = mp < 10 ? mp + 3 : mp - 9;
+	const int64_t year = yoe + era * 400 + (month <= 2 ? 1 : 0);
+
+	char buffer[32]; // wide enough for any int, which keeps -Wformat-truncation quiet
+	snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d", int(year), int(month), int(day));
+	return buffer;
 }
 
 } // namespace dscore

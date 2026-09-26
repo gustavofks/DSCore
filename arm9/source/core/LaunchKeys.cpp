@@ -11,7 +11,7 @@ namespace {
 
 // TWLSettings::TLaunchType values (universal/include/common/twlmenusettings.h).
 constexpr const char* kLaunchTypeSdFlashcard = "1"; // ESDFlashcardLaunch: DS games through nds-bootstrap
-constexpr const char* kLaunchTypeGbaRunner2 = "17"; // EGBARunner2Launch
+constexpr const char* kGbaRunner2 = "sd:/_nds/GBARunner2_arm7dldi_dsi.nds";
 
 constexpr uint32_t kRsetMarker = 0x54455352; // 'RSET' as stored little-endian in memory
 constexpr char kRsetBytes[] = {'R', 'S', 'E', 'T'};
@@ -27,19 +27,30 @@ RomKind romKindFor(std::string_view path) {
 std::vector<IniKey> relaunchKeys(std::string_view romPath, bool homebrew) {
 	const RomKind kind = romKindFor(romPath);
 	if (kind == RomKind::Unsupported) return {};
-
+	const bool viaBootstrapHb = kind == RomKind::Gba || homebrew;
 	std::vector<IniKey> keys = {
 		{"ROM_PATH", std::string(romPath)},
-		{"LAUNCH_TYPE", kind == RomKind::Nds ? kLaunchTypeSdFlashcard : kLaunchTypeGbaRunner2},
+		{"LAUNCH_TYPE", kLaunchTypeSdFlashcard},
 		{"PREVIOUS_USED_DEVICE", "0"},
 		{"SLOT1_LAUNCHED", "0"}, // otherwise lastRunROM() boots the Slot-1 card instead
+		{"HOMEBREW_BOOTSTRAP", viaBootstrapHb ? "1" : "0"},
 	};
-	if (kind == RomKind::Nds) {
-		keys.push_back({"HOMEBREW_BOOTSTRAP", homebrew ? "1" : "0"});
-	} else {
-		keys.push_back({"HOMEBREW_ARG", std::string(romPath)}); // the ROM GBARunner2 is given
-	}
+	if (kind == RomKind::Gba) keys.push_back({"HOMEBREW_ARG", ""}); // the ROM goes to nds-bootstrap.ini
 	return keys;
+}
+
+std::vector<IniKey> bootstrapKeys(std::string_view romPath) {
+	if (romKindFor(romPath) != RomKind::Gba) return {};
+	std::string fatPath(romPath);
+	if (fatPath.rfind("sd:/", 0) == 0) fatPath.replace(0, 3, "fat:");
+	return {
+		{"NDS_PATH", kGbaRunner2},
+		{"HOMEBREW_ARG", fatPath},
+		{"RAM_DRIVE_PATH", ""},
+		{"DSI_MODE", "0"},
+		{"BOOST_CPU", "1"},
+		{"BOOST_VRAM", "0"},
+	};
 }
 
 bool usesRsetMarker(const uint8_t* arm9, size_t len) {

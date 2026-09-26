@@ -4,13 +4,13 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
-#include <unistd.h>
 
 #include "common/nds_loader_arm9.h"
 #include "common/systemdetails.h"
 #include "core/IniPatch.h"
 #include "core/LaunchKeys.h"
 #include "core/NdsHeader.h"
+#include "platform/FileIo.h"
 
 namespace dscore {
 
@@ -18,7 +18,8 @@ namespace {
 
 constexpr const char* kSettingsPath = "sd:/_nds/TWiLightMenu/settings.ini";
 constexpr const char* kSettingsBackup = "sd:/_nds/TWiLightMenu/settings.ini.dscore-bak";
-constexpr const char* kSettingsTemp = "sd:/_nds/TWiLightMenu/settings.ini.dscore-tmp";
+constexpr const char* kBootstrapPath = "sd:/_nds/nds-bootstrap.ini";
+constexpr const char* kBootstrapBackup = "sd:/_nds/nds-bootstrap.ini.dscore-bak";
 constexpr const char* kMainSrldr = "sd:/_nds/TWiLightMenu/main.srldr";
 
 // title/arm9/source/main.cpp calls lastRunROM() when this bit is set and kRelaunchMarker holds the
@@ -78,34 +79,13 @@ bool detectRsetMarker(bool& rset) {
 	return ok;
 }
 
-bool readFile(const char* path, std::string& out) {
-	FILE* f = fopen(path, "rb");
-	if (!f) return false;
-	char buffer[1024];
-	size_t n;
-	out.clear();
-	while ((n = fread(buffer, 1, sizeof(buffer), f)) > 0) out.append(buffer, n);
-	const bool ok = !ferror(f);
-	fclose(f);
-	return ok;
-}
-
-bool writeFile(const char* path, const std::string& data) {
-	FILE* f = fopen(path, "wb");
-	if (!f) return false;
-	const bool written = fwrite(data.data(), 1, data.size(), f) == data.size();
-	const bool closed = fclose(f) == 0;
-	return written && closed;
-}
-
-// Writes to a temporary file first so a failed write never truncates settings.ini.
-bool replaceFile(const char* path, const std::string& data) {
-	if (!writeFile(kSettingsTemp, data)) return false;
-	if (remove(path) == 0 && rename(kSettingsTemp, path) == 0) return true;
-	// FAT rename can fail after the remove; fall back to writing the file directly.
-	const bool ok = writeFile(path, data);
-	remove(kSettingsTemp);
-	return ok;
+// Sets keys in one [section] of a TWiLight INI file, backing the file up the first time DSCore edits it.
+bool patchIniFile(const char* path, const char* backup, const char* section, const std::vector<IniKey>& keys) {
+	std::string ini;
+	if (!readFile(path, ini)) return false;
+	if (!fileExists(backup) && !writeFile(backup, ini.data(), ini.size())) return false;
+	const std::string patched = patchIni(ini, section, keys);
+	return replaceFile(path, patched.data(), patched.size());
 }
 
 } // namespace
@@ -119,10 +99,12 @@ LaunchError launchViaTwilight(const std::string& romPath, int* loaderCode) {
 	bool rset = false;
 	if (!detectRsetMarker(rset)) return LaunchError::MainRead;
 
-	std::string ini;
-	if (!readFile(kSettingsPath, ini)) return LaunchError::SettingsRead;
-	if (access(kSettingsBackup, F_OK) != 0 && !writeFile(kSettingsBackup, ini)) return LaunchError::SettingsWrite;
-	if (!replaceFile(kSettingsPath, patchIni(ini, "SRLOADER", keys))) return LaunchError::SettingsWrite;
+	if (!fileExists(kSettingsPath)) return LaunchError::SettingsRead;
+	if (!patchIniFile(kSettingsPath, kSettingsBackup, "SRLOADER", keys)) return LaunchError::SettingsWrite;
+	const std::vector<IniKey> bootstrap = bootstrapKeys(romPath);
+	if (!bootstrap.empty() && !patchIniFile(kBootstrapPath, kBootstrapBackup, "NDS-BOOTSTRAP", bootstrap)) {
+		return LaunchError::SettingsWrite;
+	}
 
 	const u32 previousMarker = relaunchMarkerSlot;
 	softResetParams |= kAutoRunBit;
@@ -144,7 +126,7 @@ const char* describe(LaunchError error) {
 		case LaunchError::RomRead: return "could not read the ROM header";
 		case LaunchError::MainRead: return "could not read TWiLight main.srldr";
 		case LaunchError::SettingsRead: return "could not read TWiLight settings.ini";
-		case LaunchError::SettingsWrite: return "could not write TWiLight settings.ini";
+		case LaunchError::SettingsWrite: return "could not write TWiLight's settings";
 		case LaunchError::LoaderFailed: return "runNdsFile could not boot main.srldr";
 	}
 	return "unknown error";

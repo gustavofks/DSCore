@@ -1,0 +1,23 @@
+#pragma once
+
+#include <string>
+#include <string_view>
+
+#include "core/Library.h"
+
+namespace dscore {
+
+enum class ViewMode : uint8_t { Grid, List };
+
+// Frontend settings and where the user was, restored after returning from a game.
+struct Config {
+	Tab tab = Tab::All;
+	SortKey sort = SortKey::Name;
+	ViewMode view = ViewMode::Grid;
+	std::string selectedPath; // game under the cursor
+
+	std::string serialize() const;
+	static Config parse(std::string_view ini); // unknown or invalid values keep their defaults
+};
+
+} // namespace dscore
