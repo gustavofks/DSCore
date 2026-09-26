@@ -7,7 +7,7 @@ include $(DEVKITARM)/ds_rules
 UNIVERSAL := ../third_party/twilight/universal
 TARGET    := dscore
 BUILD     := build
-SOURCES   := source source/core source/launch \
+SOURCES   := source source/core source/gfx source/launch source/platform source/ui \
              $(UNIVERSAL)/source/common $(UNIVERSAL)/source/nds_loader $(UNIVERSAL)/source/lodepng \
              $(UNIVERSAL)/source/tonccpy $(UNIVERSAL)/arm9/source $(UNIVERSAL)/sdmmc/arm9/source
 INCLUDES  := source $(UNIVERSAL)/include $(UNIVERSAL)/arm9/include $(UNIVERSAL)/sdmmc/arm9/include
