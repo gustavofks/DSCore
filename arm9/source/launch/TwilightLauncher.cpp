@@ -4,13 +4,13 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
-#include <unistd.h>
 
 #include "common/nds_loader_arm9.h"
 #include "common/systemdetails.h"
 #include "core/IniPatch.h"
 #include "core/LaunchKeys.h"
 #include "core/NdsHeader.h"
+#include "platform/FileIo.h"
 
 namespace dscore {
 
@@ -18,7 +18,6 @@ namespace {
 
 constexpr const char* kSettingsPath = "sd:/_nds/TWiLightMenu/settings.ini";
 constexpr const char* kSettingsBackup = "sd:/_nds/TWiLightMenu/settings.ini.dscore-bak";
-constexpr const char* kSettingsTemp = "sd:/_nds/TWiLightMenu/settings.ini.dscore-tmp";
 constexpr const char* kMainSrldr = "sd:/_nds/TWiLightMenu/main.srldr";
 
 // title/arm9/source/main.cpp calls lastRunROM() when this bit is set and kRelaunchMarker holds the
@@ -78,36 +77,6 @@ bool detectRsetMarker(bool& rset) {
 	return ok;
 }
 
-bool readFile(const char* path, std::string& out) {
-	FILE* f = fopen(path, "rb");
-	if (!f) return false;
-	char buffer[1024];
-	size_t n;
-	out.clear();
-	while ((n = fread(buffer, 1, sizeof(buffer), f)) > 0) out.append(buffer, n);
-	const bool ok = !ferror(f);
-	fclose(f);
-	return ok;
-}
-
-bool writeFile(const char* path, const std::string& data) {
-	FILE* f = fopen(path, "wb");
-	if (!f) return false;
-	const bool written = fwrite(data.data(), 1, data.size(), f) == data.size();
-	const bool closed = fclose(f) == 0;
-	return written && closed;
-}
-
-// Writes to a temporary file first so a failed write never truncates settings.ini.
-bool replaceFile(const char* path, const std::string& data) {
-	if (!writeFile(kSettingsTemp, data)) return false;
-	if (remove(path) == 0 && rename(kSettingsTemp, path) == 0) return true;
-	// FAT rename can fail after the remove; fall back to writing the file directly.
-	const bool ok = writeFile(path, data);
-	remove(kSettingsTemp);
-	return ok;
-}
-
 } // namespace
 
 LaunchError launchViaTwilight(const std::string& romPath, int* loaderCode) {
@@ -121,8 +90,9 @@ LaunchError launchViaTwilight(const std::string& romPath, int* loaderCode) {
 
 	std::string ini;
 	if (!readFile(kSettingsPath, ini)) return LaunchError::SettingsRead;
-	if (access(kSettingsBackup, F_OK) != 0 && !writeFile(kSettingsBackup, ini)) return LaunchError::SettingsWrite;
-	if (!replaceFile(kSettingsPath, patchIni(ini, "SRLOADER", keys))) return LaunchError::SettingsWrite;
+	if (!fileExists(kSettingsBackup) && !writeFile(kSettingsBackup, ini.data(), ini.size())) return LaunchError::SettingsWrite;
+	const std::string patched = patchIni(ini, "SRLOADER", keys);
+	if (!replaceFile(kSettingsPath, patched.data(), patched.size())) return LaunchError::SettingsWrite;
 
 	const u32 previousMarker = relaunchMarkerSlot;
 	softResetParams |= kAutoRunBit;
