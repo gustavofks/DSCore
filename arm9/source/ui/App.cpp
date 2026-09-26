@@ -39,6 +39,7 @@ std::string App::handle(Action action, int touchX, int touchY) {
 		case Action::ToggleView:
 			config_.view = config_.view == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
 			configChanged_ = true;
+			bottomValid_ = false;
 			redraw_ = true;
 			break;
 		case Action::CycleSort:
@@ -69,7 +70,22 @@ void App::drawTop(Canvas& canvas) const {
 }
 
 void App::drawBottom(Canvas& canvas) const {
-	drawBrowserScreen(canvas, state());
+	const BrowserState s = state();
+	if (bottomValid_ && pageStart(drawnCursor_, config_.view) == pageStart(cursor_, config_.view)) {
+		if (drawnCursor_ != cursor_) {
+			drawBrowserItem(canvas, s, drawnCursor_);
+			drawBrowserItem(canvas, s, cursor_);
+		}
+	} else {
+		drawBrowserScreen(canvas, s);
+	}
+	bottomValid_ = true;
+	drawnCursor_ = cursor_;
+}
+
+void App::invalidate() {
+	bottomValid_ = false;
+	redraw_ = true;
 }
 
 const GameEntry* App::selected() const {
@@ -84,6 +100,7 @@ BrowserState App::state() const {
 	BrowserState s;
 	s.library = &library_;
 	s.userData = &userData_;
+	s.icons = &icons_;
 	s.view = &view_;
 	s.cursor = cursor_;
 	s.tab = config_.tab;
@@ -104,6 +121,7 @@ void App::rebuildView(const std::string& keepPath, Missing missing) {
 		}
 	}
 	cursor_ = view_.empty() ? 0 : cursor;
+	bottomValid_ = false;
 	if (const GameEntry* game = selected(); game && game->path != config_.selectedPath) {
 		config_.selectedPath = game->path;
 		configChanged_ = true;

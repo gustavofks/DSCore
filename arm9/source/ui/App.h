@@ -27,6 +27,9 @@ public:
 	void drawTop(Canvas& canvas) const;
 	void drawBottom(Canvas& canvas) const;
 
+	// Call after something else drew on the screens: the next frame redraws everything.
+	void invalidate();
+
 	const GameEntry* selected() const;
 
 	// Each flag is cleared when read.
@@ -45,6 +48,11 @@ private:
 	UserData& userData_;
 	Config& config_;
 	std::vector<size_t> view_;
+	mutable IconCache icons_; // drawing is const but warms the cache
+	// The bottom screen keeps its pixels between frames: a cursor move within the page only redraws the
+	// two games involved. Anything else invalidates it.
+	mutable bool bottomValid_ = false;
+	mutable size_t drawnCursor_ = 0;
 	size_t cursor_ = 0;
 	bool redraw_ = true;
 	bool userDataChanged_ = false;

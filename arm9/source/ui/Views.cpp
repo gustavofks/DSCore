@@ -1,5 +1,7 @@
 #include "ui/Views.h"
 
+#include <algorithm>
+
 #include "core/RomMedia.h"
 #include "core/Text.h"
 #include "ui/Layout.h"
@@ -92,49 +94,39 @@ void drawFooter(Canvas& canvas, const BrowserState& state) {
 	canvas.drawText(smallFont(), kScreenW - 4 - textWidth(smallFont(), sort), textY, sort, palette::kMuted);
 }
 
-void drawGrid(Canvas& canvas, const BrowserState& state) {
-	const size_t first = pageStart(state.cursor, ViewMode::Grid);
-	for (int slot = 0; slot < kGridPerPage; ++slot) {
-		const size_t index = first + size_t(slot);
-		if (index >= state.view->size()) break;
-		const GameEntry& game = state.library->games[(*state.view)[index]];
-		const Rect cell = gridCellRect(slot);
-		if (index == state.cursor) {
-			canvas.fillRect({cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4}, palette::kSurfaceHigh);
-			canvas.strokeRect({cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4}, palette::kAccent, 2);
-		}
-		drawGameTile(canvas, *state.library, game, cell.x + (cell.w - kIconSize) / 2, cell.y + (cell.h - kIconSize) / 2,
-			kIconSize);
-		if (isFavorite(state, game)) drawStar(canvas, cell.x + cell.w - 13, cell.y + 4, palette::kFavorite);
+void drawGridCell(Canvas& canvas, const BrowserState& state, size_t index) {
+	const GameEntry& game = state.library->games[(*state.view)[index]];
+	const Rect cell = gridCellRect(int(index - pageStart(index, ViewMode::Grid)));
+	canvas.fillRect(cell, palette::kBackground);
+	if (index == state.cursor) {
+		canvas.fillRect({cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4}, palette::kSurfaceHigh);
+		canvas.strokeRect({cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4}, palette::kAccent, 2);
 	}
+	drawGameTile(canvas, *state.library, *state.icons, game, cell.x + (cell.w - kIconSize) / 2,
+		cell.y + (cell.h - kIconSize) / 2, kIconSize);
+	if (isFavorite(state, game)) drawStar(canvas, cell.x + cell.w - 13, cell.y + 4, palette::kFavorite);
 }
 
-void drawList(Canvas& canvas, const BrowserState& state) {
-	const size_t first = pageStart(state.cursor, ViewMode::List);
-	for (int row = 0; row < kListRows; ++row) {
-		const size_t index = first + size_t(row);
-		if (index >= state.view->size()) break;
-		const GameEntry& game = state.library->games[(*state.view)[index]];
-		const Rect r = listRowRect(row);
-		if (index == state.cursor) {
-			canvas.fillRect(r, palette::kSurfaceHigh);
-			canvas.fillRect({r.x, r.y, 3, r.h}, palette::kAccent);
-		}
-		drawGameTile(canvas, *state.library, game, 6, r.y, 16);
-		const bool favorite = isFavorite(state, game);
-		const int textW = kScreenW - 28 - (favorite ? 14 : 4);
-		canvas.drawText(smallFont(), 28, r.y + (r.h - smallFont().height) / 2, ellipsize(smallFont(), game.title, textW),
-			index == state.cursor ? palette::kText : palette::kMuted);
-		if (favorite) drawStar(canvas, kScreenW - 12, r.y + 3, palette::kFavorite);
-	}
+void drawListRow(Canvas& canvas, const BrowserState& state, size_t index) {
+	const GameEntry& game = state.library->games[(*state.view)[index]];
+	const Rect r = listRowRect(int(index - pageStart(index, ViewMode::List)));
+	const bool selected = index == state.cursor;
+	canvas.fillRect(r, selected ? palette::kSurfaceHigh : palette::kBackground);
+	if (selected) canvas.fillRect({r.x, r.y, 3, r.h}, palette::kAccent);
+	drawGameTile(canvas, *state.library, *state.icons, game, 6, r.y, 16);
+	const bool favorite = isFavorite(state, game);
+	const int textW = kScreenW - 28 - (favorite ? 14 : 4);
+	canvas.drawText(smallFont(), 28, r.y + (r.h - smallFont().height) / 2, ellipsize(smallFont(), game.title, textW),
+		selected ? palette::kText : palette::kMuted);
+	if (favorite) drawStar(canvas, kScreenW - 12, r.y + 3, palette::kFavorite);
 }
 
 } // namespace
 
-void drawGameTile(Canvas& canvas, const LibraryData& library, const GameEntry& game, int x, int y, int size) {
+void drawGameTile(Canvas& canvas, const LibraryData& library, IconCache& icons, const GameEntry& game, int x, int y,
+	int size) {
 	if (game.iconIndex >= 0) {
-		uint16_t pixels[kIconSize * kIconSize];
-		decodeNdsIcon(library.icons[size_t(game.iconIndex)], pixels);
+		const uint16_t* pixels = icons.get(library.icons, game.iconIndex);
 		if (size >= kIconSize) {
 			canvas.blit(pixels, kIconSize, kIconSize, x, y, size / kIconSize);
 		} else {
@@ -173,7 +165,7 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 			state.tab == Tab::All ? "Add ROMs to sd:/roms/NDS or sd:/roms/GBA" : "Press L/R to change tab", palette::kMuted);
 	} else {
 		canvas.fillRect({12, 28, 104, 104}, palette::kSurface);
-		drawGameTile(canvas, *state.library, *game, 16, 32, 96);
+		drawGameTile(canvas, *state.library, *state.icons, *game, 16, 32, 96);
 
 		const int textX = 126;
 		const int textW = kScreenW - textX - 8;
@@ -210,12 +202,18 @@ void drawBrowserScreen(Canvas& canvas, const BrowserState& state) {
 	drawTabs(canvas, state.tab);
 	if (state.view->empty()) {
 		drawCentered(canvas, smallFont(), {0, kContentY, kScreenW, kContentH}, "Nothing in this tab", palette::kMuted);
-	} else if (state.mode == ViewMode::Grid) {
-		drawGrid(canvas, state);
 	} else {
-		drawList(canvas, state);
+		const size_t first = pageStart(state.cursor, state.mode);
+		const size_t last = std::min(state.view->size(), first + pageSize(state.mode));
+		for (size_t index = first; index < last; ++index) drawBrowserItem(canvas, state, index);
 	}
 	drawFooter(canvas, state);
+}
+
+void drawBrowserItem(Canvas& canvas, const BrowserState& state, size_t index) {
+	if (index >= state.view->size()) return;
+	if (state.mode == ViewMode::Grid) drawGridCell(canvas, state, index);
+	else drawListRow(canvas, state, index);
 }
 
 void drawMessageScreen(Canvas& canvas, const std::string& title, const std::vector<std::string>& lines) {
