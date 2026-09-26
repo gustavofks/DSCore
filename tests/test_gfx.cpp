@@ -96,3 +96,42 @@ TEST_CASE("wrapText breaks at spaces and ellipsizes the last line") {
 	CHECK(wrapText(font, "Short", 60, 3) == std::vector<std::string>{"Short"});
 	CHECK(wrapText(font, "", 60, 2).empty());
 }
+
+#include "ui/IconCache.h"
+
+TEST_CASE("IconCache decodes once and evicts the least recently used icon") {
+	std::vector<NdsIcon> icons(IconCache::kSlots + 1);
+	for (size_t i = 0; i < icons.size(); ++i) {
+		icons[i] = NdsIcon{};
+		icons[i].bitmap[0] = 0x01;
+		icons[i].palette[1] = uint16_t(i);
+	}
+	IconCache cache;
+	const uint16_t* first = cache.get(icons, 0);
+	CHECK(first[0] == (0x8000 | 0));
+	CHECK(cache.get(icons, 0) == first); // cached: same slot
+
+	icons[0].palette[1] = 0x1234;       // a stale source proves the cached copy is used
+	CHECK(cache.get(icons, 0)[0] == (0x8000 | 0));
+
+	for (int i = 1; i <= IconCache::kSlots; ++i) cache.get(icons, i); // fills every slot, evicting 0
+	CHECK(cache.get(icons, 0)[0] == (0x8000 | 0x1234));              // decoded again
+}
+
+TEST_CASE("Canvas reports the rows drawn since the last call") {
+	TestCanvas t(10, 20);
+	int first = -1, last = -1;
+	REQUIRE(t.canvas.takeDirtyRows(first, last)); // a new canvas is entirely dirty
+	CHECK(first == 0);
+	CHECK(last == 20);
+	CHECK_FALSE(t.canvas.takeDirtyRows(first, last));
+
+	t.canvas.fillRect({2, 5, 3, 4}, 1);
+	t.canvas.drawText(smallFont(), 0, 15, "A", 1); // 12 rows tall, clipped at 20
+	REQUIRE(t.canvas.takeDirtyRows(first, last));
+	CHECK(first == 5);
+	CHECK(last == 20);
+
+	t.canvas.fillRect({2, -5, 3, 3}, 1); // fully off-canvas: nothing changes
+	CHECK_FALSE(t.canvas.takeDirtyRows(first, last));
+}

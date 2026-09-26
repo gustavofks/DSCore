@@ -24,7 +24,8 @@ constexpr uint16_t rgb(int r, int g, int b) {
 // Software drawing into a 16-bit pixel buffer it does not own. Every call clips to the buffer.
 class Canvas {
 public:
-	Canvas(uint16_t* pixels, int width, int height) : pixels_(pixels), width_(width), height_(height) {}
+	Canvas(uint16_t* pixels, int width, int height)
+		: pixels_(pixels), width_(width), height_(height), dirtyFirst_(0), dirtyLast_(height) {}
 
 	int width() const { return width_; }
 	int height() const { return height_; }
@@ -41,7 +42,16 @@ public:
 	// width drawn.
 	int drawText(const Font& font, int x, int y, std::string_view text, uint16_t color, int scale = 1);
 
+	// Rows touched since the last call, as [first, last); false when nothing changed. Lets the caller copy
+	// only those rows to video memory.
+	bool takeDirtyRows(int& first, int& last);
+
 private:
+	void markDirty(int y0, int y1) {
+		if (y0 < dirtyFirst_) dirtyFirst_ = y0 < 0 ? 0 : y0;
+		if (y1 > dirtyLast_) dirtyLast_ = y1 > height_ ? height_ : y1;
+	}
+
 	void set(int x, int y, uint16_t color) {
 		if (x >= 0 && y >= 0 && x < width_ && y < height_) pixels_[y * width_ + x] = color;
 	}
@@ -49,6 +59,8 @@ private:
 	uint16_t* pixels_;
 	int width_;
 	int height_;
+	int dirtyFirst_ = 0;
+	int dirtyLast_ = 0;
 };
 
 } // namespace dscore
