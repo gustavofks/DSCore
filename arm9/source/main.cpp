@@ -150,10 +150,18 @@ int main(int argc, char** argv) {
 	Config config = storage::loadConfig();
 	UserData userData = storage::loadUserData();
 	const LibraryData library = loadLibrary(screens, log);
+	App app(library, userData, config);
 	log += "ready: " + std::to_string(elapsedMs()) + " ms since start\n";
+
+	// One full redraw of both screens: the cost of every cursor move.
+	const unsigned drawStart = elapsedMs();
+	app.drawTop(screens.top());
+	app.drawBottom(screens.bottom());
+	log += "draw: " + std::to_string(elapsedMs() - drawStart) + " ms\n";
+	screens.present();
+	app.takeRedraw();
 	storage::writeBootLog(log);
 
-	App app(library, userData, config);
 	keysSetRepeat(15, 4);
 	int configSaveCountdown = -1;
 	while (true) {
