@@ -1,5 +1,6 @@
 #include "doctest.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -9,15 +10,14 @@ using namespace dscore;
 
 namespace {
 
-// Parses by file name: .nds files get an icon whose first byte is the path length.
-bool fakeParse(const std::string& path, GameEntry& game, NdsIcon* icon) {
+// Parses by file name: .nds files get an icon whose first byte is the path length, except "noicon".
+bool fakeParse(const std::string& path, GameEntry& game, std::optional<NdsIcon>& icon) {
 	if (path.find("broken") != std::string::npos) return false;
 	game.title = path.substr(path.find_last_of('/') + 1);
 	game.system = romKindFor(path) == RomKind::Gba ? System::Gba : System::Nds;
-	if (icon && game.system == System::Nds) {
-		*icon = NdsIcon{};
+	if (game.system == System::Nds && path.find("noicon") == std::string::npos) {
+		icon.emplace();
 		icon->bitmap[0] = uint8_t(path.size());
-		return true;
 	}
 	return true;
 }
@@ -27,7 +27,7 @@ bool fakeParse(const std::string& path, GameEntry& game, NdsIcon* icon) {
 TEST_CASE("applyScan parses new files and drops missing ones") {
 	LibraryData lib;
 	std::vector<std::string> parsed;
-	const auto parse = [&](const std::string& path, GameEntry& game, NdsIcon* icon) {
+	const auto parse = [&](const std::string& path, GameEntry& game, std::optional<NdsIcon>& icon) {
 		parsed.push_back(path);
 		return fakeParse(path, game, icon);
 	};
@@ -49,7 +49,7 @@ TEST_CASE("applyScan reports no change when the file list is the same") {
 	LibraryData lib;
 	applyScan(lib, {"sd:/roms/NDS/a.nds"}, fakeParse);
 	int calls = 0;
-	CHECK_FALSE(applyScan(lib, {"sd:/roms/NDS/a.nds"}, [&](const std::string& p, GameEntry& g, NdsIcon* i) {
+	CHECK_FALSE(applyScan(lib, {"sd:/roms/NDS/a.nds"}, [&](const std::string& p, GameEntry& g, std::optional<NdsIcon>& i) {
 		++calls;
 		return fakeParse(p, g, i);
 	}));
@@ -68,10 +68,13 @@ TEST_CASE("applyScan compacts icons so indexes stay valid") {
 	CHECK(lib.icons[0].bitmap[0] == std::string("sd:/roms/NDS/ccc.nds").size());
 }
 
-TEST_CASE("applyScan skips files it cannot parse and fills path and size") {
+TEST_CASE("applyScan skips files it cannot parse and keeps games without icons") {
 	LibraryData lib;
-	applyScan(lib, {"sd:/roms/NDS/broken.nds", "sd:/roms/GBA/ok.gba"}, fakeParse);
-	REQUIRE(lib.games.size() == 1);
+	applyScan(lib, {"sd:/roms/NDS/broken.nds", "sd:/roms/GBA/ok.gba", "sd:/roms/NDS/noicon.nds"}, fakeParse);
+	REQUIRE(lib.games.size() == 2);
 	CHECK(lib.games[0].path == "sd:/roms/GBA/ok.gba");
 	CHECK(lib.games[0].iconIndex == -1);
+	CHECK(lib.games[1].path == "sd:/roms/NDS/noicon.nds");
+	CHECK(lib.games[1].iconIndex == -1);
+	CHECK(lib.icons.empty());
 }

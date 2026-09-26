@@ -29,14 +29,13 @@ bool applyScan(LibraryData& library, const std::vector<std::string>& foundPaths,
 		known.insert(path);
 		changed = true;
 		GameEntry game;
-		NdsIcon icon{};
-		const bool isDs = romKindFor(path) == RomKind::Nds;
-		if (!parse(path, game, isDs ? &icon : nullptr)) continue;
+		std::optional<NdsIcon> icon;
+		if (!parse(path, game, icon)) continue;
 		game.path = path;
 		game.iconIndex = -1;
-		if (isDs && game.system == System::Nds) {
+		if (icon) {
 			game.iconIndex = int32_t(next.icons.size());
-			next.icons.push_back(icon);
+			next.icons.push_back(*icon);
 		}
 		next.games.push_back(std::move(game));
 	}

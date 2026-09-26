@@ -52,6 +52,18 @@ std::string sizeText(uint32_t bytes) {
 	return std::to_string(bytes >> 10) + " KB";
 }
 
+uint16_t tileColor(const GameEntry& game) {
+	uint32_t hash = 2166136261u;
+	for (char c : game.title) hash = (hash ^ uint8_t(c)) * 16777619u;
+	const uint16_t* shades = game.system == System::Nds ? palette::kNdsShades : palette::kGbaShades;
+	return shades[hash % 4];
+}
+
+std::string fileName(const std::string& path) {
+	const size_t slash = path.find_last_of('/');
+	return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
 std::string playedText(const GameStats* stats) {
 	if (!stats || stats->timesPlayed == 0) return "Not played yet";
 	if (stats->timesPlayed == 1) return "Played once";
@@ -135,7 +147,7 @@ void drawGameTile(Canvas& canvas, const LibraryData& library, const GameEntry& g
 		return;
 	}
 
-	canvas.fillRect({x, y, size, size}, game.system == System::Nds ? palette::kNds : palette::kGba);
+	canvas.fillRect({x, y, size, size}, tileColor(game));
 	const std::string initials = initialsFor(game.title);
 	const Font& font = size >= kIconSize ? largeFont() : smallFont();
 	const int scale = size >= kIconSize ? size / kIconSize : 1;
@@ -172,8 +184,9 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 		}
 		y += 6;
 		const GameStats* stats = state.userData->find(game->path);
-		std::vector<std::string> info = {systemName(game->system), sizeText(game->fileSize), playedText(stats)};
-		if (!game->gameCode.empty()) info[0] += "  " + game->gameCode;
+		std::string sizeLine = sizeText(game->fileSize);
+		if (!game->gameCode.empty()) sizeLine += "  \xC2\xB7  " + game->gameCode; // U+00B7 middle dot
+		std::vector<std::string> info = {systemName(game->system), sizeLine, playedText(stats)};
 		if (stats && stats->lastPlayed >= kFirstRtcTime) info.push_back("Last: " + formatDate(stats->lastPlayed));
 		for (const std::string& line : info) {
 			canvas.drawText(smallFont(), textX, y, ellipsize(smallFont(), line, textW), palette::kMuted);
@@ -183,6 +196,8 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 			drawStar(canvas, textX, y + 2, palette::kFavorite);
 			canvas.drawText(smallFont(), textX + 13, y + 1, "Favorite", palette::kFavorite);
 		}
+		// The file name tells apart dumps with the same title.
+		canvas.drawText(smallFont(), 12, 142, ellipsize(smallFont(), fileName(game->path), kScreenW - 24), palette::kMuted);
 	}
 
 	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, palette::kSurface);

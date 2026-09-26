@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -9,10 +10,9 @@
 
 namespace dscore {
 
-// Fills game (everything but path and iconIndex) for the ROM at path. icon is non-null for DS games;
-// setting it to the banner icon and returning true keeps the icon. Returns false for unreadable files,
-// which are left out of the library.
-using RomParser = std::function<bool(const std::string& path, GameEntry& game, NdsIcon* icon)>;
+// Fills game (everything but path and iconIndex) for the ROM at path and sets icon when the ROM has
+// one. Returns false for unreadable files, which are left out of the library.
+using RomParser = std::function<bool(const std::string& path, GameEntry& game, std::optional<NdsIcon>& icon)>;
 
 // Brings the library in line with the ROM paths found on the SD card: keeps cached entries that still
 // exist (in their cached order), parses only new paths, drops missing ones and compacts the icon list.
