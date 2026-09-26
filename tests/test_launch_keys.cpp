@@ -39,12 +39,29 @@ TEST_CASE("relaunchKeys marks homebrew DS files for nds-bootstrap-hb") {
 	CHECK(valueOf(relaunchKeys("sd:/roms/NDS/Homebrew.nds", true), "HOMEBREW_BOOTSTRAP") == "1");
 }
 
-TEST_CASE("relaunchKeys for a GBA game passes the ROM to GBARunner2") {
+TEST_CASE("relaunchKeys for a GBA game relaunches nds-bootstrap-hb like TWiLight's ROM browser") {
 	const auto keys = relaunchKeys("sd:/roms/GBA/Metroid.gba", false);
-	CHECK(keys.size() == 5);
-	CHECK(valueOf(keys, "LAUNCH_TYPE") == "17");
+	CHECK(keys.size() == 6);
+	CHECK(valueOf(keys, "ROM_PATH") == "sd:/roms/GBA/Metroid.gba");
+	CHECK(valueOf(keys, "LAUNCH_TYPE") == "1");
+	CHECK(valueOf(keys, "PREVIOUS_USED_DEVICE") == "0");
 	CHECK(valueOf(keys, "SLOT1_LAUNCHED") == "0");
-	CHECK(valueOf(keys, "HOMEBREW_ARG") == "sd:/roms/GBA/Metroid.gba");
+	CHECK(valueOf(keys, "HOMEBREW_BOOTSTRAP") == "1");
+	CHECK(valueOf(keys, "HOMEBREW_ARG") == "");
+}
+
+TEST_CASE("bootstrapKeys point nds-bootstrap-hb at GBARunner2 with the ROM as argument") {
+	const auto keys = bootstrapKeys("sd:/roms/GBA/Sub/Metroid.gba");
+	CHECK(valueOf(keys, "NDS_PATH") == "sd:/_nds/GBARunner2_arm7dldi_dsi.nds");
+	CHECK(valueOf(keys, "HOMEBREW_ARG") == "fat:/roms/GBA/Sub/Metroid.gba");
+	CHECK(valueOf(keys, "RAM_DRIVE_PATH") == "");
+	CHECK(valueOf(keys, "DSI_MODE") == "0");
+	CHECK(valueOf(keys, "BOOST_CPU") == "1");
+	CHECK(valueOf(keys, "BOOST_VRAM") == "0");
+}
+
+TEST_CASE("bootstrapKeys is empty for DS games, which TWiLight configures itself") {
+	CHECK(bootstrapKeys("sd:/roms/NDS/Game.nds").empty());
 }
 
 TEST_CASE("relaunchKeys is empty for unsupported files") {

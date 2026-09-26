@@ -18,6 +18,8 @@ namespace {
 
 constexpr const char* kSettingsPath = "sd:/_nds/TWiLightMenu/settings.ini";
 constexpr const char* kSettingsBackup = "sd:/_nds/TWiLightMenu/settings.ini.dscore-bak";
+constexpr const char* kBootstrapPath = "sd:/_nds/nds-bootstrap.ini";
+constexpr const char* kBootstrapBackup = "sd:/_nds/nds-bootstrap.ini.dscore-bak";
 constexpr const char* kMainSrldr = "sd:/_nds/TWiLightMenu/main.srldr";
 
 // title/arm9/source/main.cpp calls lastRunROM() when this bit is set and kRelaunchMarker holds the
@@ -77,6 +79,15 @@ bool detectRsetMarker(bool& rset) {
 	return ok;
 }
 
+// Sets keys in one [section] of a TWiLight INI file, backing the file up the first time DSCore edits it.
+bool patchIniFile(const char* path, const char* backup, const char* section, const std::vector<IniKey>& keys) {
+	std::string ini;
+	if (!readFile(path, ini)) return false;
+	if (!fileExists(backup) && !writeFile(backup, ini.data(), ini.size())) return false;
+	const std::string patched = patchIni(ini, section, keys);
+	return replaceFile(path, patched.data(), patched.size());
+}
+
 } // namespace
 
 LaunchError launchViaTwilight(const std::string& romPath, int* loaderCode) {
@@ -88,11 +99,12 @@ LaunchError launchViaTwilight(const std::string& romPath, int* loaderCode) {
 	bool rset = false;
 	if (!detectRsetMarker(rset)) return LaunchError::MainRead;
 
-	std::string ini;
-	if (!readFile(kSettingsPath, ini)) return LaunchError::SettingsRead;
-	if (!fileExists(kSettingsBackup) && !writeFile(kSettingsBackup, ini.data(), ini.size())) return LaunchError::SettingsWrite;
-	const std::string patched = patchIni(ini, "SRLOADER", keys);
-	if (!replaceFile(kSettingsPath, patched.data(), patched.size())) return LaunchError::SettingsWrite;
+	if (!fileExists(kSettingsPath)) return LaunchError::SettingsRead;
+	if (!patchIniFile(kSettingsPath, kSettingsBackup, "SRLOADER", keys)) return LaunchError::SettingsWrite;
+	const std::vector<IniKey> bootstrap = bootstrapKeys(romPath);
+	if (!bootstrap.empty() && !patchIniFile(kBootstrapPath, kBootstrapBackup, "NDS-BOOTSTRAP", bootstrap)) {
+		return LaunchError::SettingsWrite;
+	}
 
 	const u32 previousMarker = relaunchMarkerSlot;
 	softResetParams |= kAutoRunBit;
@@ -114,7 +126,7 @@ const char* describe(LaunchError error) {
 		case LaunchError::RomRead: return "could not read the ROM header";
 		case LaunchError::MainRead: return "could not read TWiLight main.srldr";
 		case LaunchError::SettingsRead: return "could not read TWiLight settings.ini";
-		case LaunchError::SettingsWrite: return "could not write TWiLight settings.ini";
+		case LaunchError::SettingsWrite: return "could not write TWiLight's settings";
 		case LaunchError::LoaderFailed: return "runNdsFile could not boot main.srldr";
 	}
 	return "unknown error";
