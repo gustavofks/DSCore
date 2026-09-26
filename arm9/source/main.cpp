@@ -8,6 +8,7 @@
 #include "core/LibraryScan.h"
 #include "launch/TwilightLauncher.h"
 #include "my_gurumeditation.h"
+#include "platform/Power.h"
 #include "platform/RomFiles.h"
 #include "platform/Screens.h"
 #include "platform/Storage.h"
@@ -85,6 +86,7 @@ LibraryData loadLibrary(Screens& screens, std::string& log) {
 // Translates this frame's buttons and touch into actions; returns a ROM path when one should launch.
 std::string handleInput(App& app) {
 	scanKeys();
+	sleepWhileLidClosed();
 	const u32 down = keysDown();
 	const u32 repeat = keysDownRepeat();
 	std::string launch;
@@ -155,6 +157,10 @@ int main(int argc, char** argv) {
 	keysSetRepeat(15, 4);
 	int configSaveCountdown = -1;
 	while (true) {
+		if (powerButtonPressed()) {
+			if (configSaveCountdown > 0) storage::saveConfig(config);
+			returnToSystemMenu();
+		}
 		const std::string path = handleInput(app);
 		if (!path.empty()) {
 			launch(screens, app, userData, config, path);
