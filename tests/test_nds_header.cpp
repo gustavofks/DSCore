@@ -57,6 +57,60 @@ TEST_CASE("parseNdsHeader reads the ARM9 binary location") {
 	CHECK(info.arm9Size == size);
 }
 
+namespace {
+
+void putU32(std::vector<uint8_t>& h, size_t offset, uint32_t value) {
+	for (int i = 0; i < 4; ++i) h[offset + i] = uint8_t(value >> (8 * i));
+}
+
+// Typical retail layout: ARM7 loaded into main RAM.
+NdsHeaderInfo retailInfo() {
+	auto h = makeHeader("ASME", 0x1000);
+	std::memcpy(&h[0x00], "SUPERMARIO64", 12);
+	putU32(h, 0x20, 0x4000);
+	putU32(h, 0x24, 0x02000800);
+	putU32(h, 0x28, 0x02000000);
+	putU32(h, 0x34, 0x02380000);
+	putU32(h, 0x38, 0x02380000);
+	NdsHeaderInfo info;
+	parseNdsHeader(h.data(), h.size(), info);
+	return info;
+}
+
+const uint8_t kRetailStart[16] = {0};
+// libnds crt0 entry: mov r0,#0x04000000 / str r0,[r0,#0x208] / mov r0,#0x13 / msr cpsr,r0
+const uint8_t kLibndsStart[16] = {0x01, 0x03, 0xA0, 0xE3, 0x08, 0x02, 0x80, 0xE5,
+                                  0x13, 0x00, 0xA0, 0xE3, 0x00, 0xF0, 0x29, 0xE1};
+
+} // namespace
+
+TEST_CASE("arm9EntryFileOffset maps the ARM9 entry point to a file offset") {
+	CHECK(arm9EntryFileOffset(retailInfo()) == 0x4800u);
+}
+
+TEST_CASE("isHomebrew is false for a retail game") {
+	CHECK_FALSE(isHomebrew(retailInfo(), kRetailStart));
+}
+
+TEST_CASE("isHomebrew detects libnds binaries by their ARM9 entry code") {
+	CHECK(isHomebrew(retailInfo(), kLibndsStart));
+}
+
+TEST_CASE("isHomebrew detects old homebrew that loads ARM7 into IWRAM") {
+	NdsHeaderInfo info = retailInfo();
+	info.arm7Entry = 0x037F8000;
+	info.arm7Ram = 0x037F8000;
+	CHECK(isHomebrew(info, kRetailStart));
+}
+
+TEST_CASE("isHomebrew detects the special-cased titles") {
+	NdsHeaderInfo info = retailInfo();
+	info.gameTitle = "UNLAUNCH.DSI";
+	CHECK(isHomebrew(info, kRetailStart));
+	info.gameTitle = "NMP4BOOT";
+	CHECK(isHomebrew(info, kRetailStart));
+}
+
 TEST_CASE("parseNdsHeader rejects short buffers") {
 	auto h = makeHeader("ASMA", 0x1000);
 	NdsHeaderInfo info;

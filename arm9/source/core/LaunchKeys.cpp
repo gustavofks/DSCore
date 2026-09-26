@@ -24,18 +24,22 @@ RomKind romKindFor(std::string_view path) {
 	return RomKind::Unsupported;
 }
 
-std::vector<IniKey> relaunchKeys(std::string_view romPath) {
-	const char* launchType = nullptr;
-	switch (romKindFor(romPath)) {
-		case RomKind::Nds: launchType = kLaunchTypeSdFlashcard; break;
-		case RomKind::Gba: launchType = kLaunchTypeGbaRunner2; break;
-		case RomKind::Unsupported: return {};
-	}
-	return {
+std::vector<IniKey> relaunchKeys(std::string_view romPath, bool homebrew) {
+	const RomKind kind = romKindFor(romPath);
+	if (kind == RomKind::Unsupported) return {};
+
+	std::vector<IniKey> keys = {
 		{"ROM_PATH", std::string(romPath)},
-		{"LAUNCH_TYPE", launchType},
+		{"LAUNCH_TYPE", kind == RomKind::Nds ? kLaunchTypeSdFlashcard : kLaunchTypeGbaRunner2},
 		{"PREVIOUS_USED_DEVICE", "0"},
+		{"SLOT1_LAUNCHED", "0"}, // otherwise lastRunROM() boots the Slot-1 card instead
 	};
+	if (kind == RomKind::Nds) {
+		keys.push_back({"HOMEBREW_BOOTSTRAP", homebrew ? "1" : "0"});
+	} else {
+		keys.push_back({"HOMEBREW_ARG", std::string(romPath)}); // the ROM GBARunner2 is given
+	}
+	return keys;
 }
 
 bool usesRsetMarker(const uint8_t* arm9, size_t len) {

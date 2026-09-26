@@ -14,25 +14,41 @@ TEST_CASE("romKindFor uses the extension, ignoring case") {
 	CHECK(romKindFor("sd:/roms/GBA/Game.sav") == RomKind::Unsupported);
 }
 
-TEST_CASE("relaunchKeys for a DS game") {
-	const auto keys = relaunchKeys("sd:/roms/NDS/Mario Kart DS.nds");
-	REQUIRE(keys.size() == 3);
-	CHECK(std::string(keys[0].key) == "ROM_PATH");
-	CHECK(keys[0].value == "sd:/roms/NDS/Mario Kart DS.nds");
-	CHECK(std::string(keys[1].key) == "LAUNCH_TYPE");
-	CHECK(keys[1].value == "1");
-	CHECK(std::string(keys[2].key) == "PREVIOUS_USED_DEVICE");
-	CHECK(keys[2].value == "0");
+namespace {
+
+std::string valueOf(const std::vector<IniKey>& keys, const char* key) {
+	for (const IniKey& k : keys) {
+		if (k.key == key) return k.value;
+	}
+	return "<missing>";
 }
 
-TEST_CASE("relaunchKeys for a GBA game uses GBARunner2") {
-	const auto keys = relaunchKeys("sd:/roms/GBA/Metroid.gba");
-	REQUIRE(keys.size() == 3);
-	CHECK(keys[1].value == "17");
+} // namespace
+
+TEST_CASE("relaunchKeys for a retail DS game") {
+	const auto keys = relaunchKeys("sd:/roms/NDS/Mario Kart DS.nds", false);
+	CHECK(keys.size() == 5);
+	CHECK(valueOf(keys, "ROM_PATH") == "sd:/roms/NDS/Mario Kart DS.nds");
+	CHECK(valueOf(keys, "LAUNCH_TYPE") == "1");
+	CHECK(valueOf(keys, "PREVIOUS_USED_DEVICE") == "0");
+	CHECK(valueOf(keys, "SLOT1_LAUNCHED") == "0");
+	CHECK(valueOf(keys, "HOMEBREW_BOOTSTRAP") == "0");
+}
+
+TEST_CASE("relaunchKeys marks homebrew DS files for nds-bootstrap-hb") {
+	CHECK(valueOf(relaunchKeys("sd:/roms/NDS/Homebrew.nds", true), "HOMEBREW_BOOTSTRAP") == "1");
+}
+
+TEST_CASE("relaunchKeys for a GBA game passes the ROM to GBARunner2") {
+	const auto keys = relaunchKeys("sd:/roms/GBA/Metroid.gba", false);
+	CHECK(keys.size() == 5);
+	CHECK(valueOf(keys, "LAUNCH_TYPE") == "17");
+	CHECK(valueOf(keys, "SLOT1_LAUNCHED") == "0");
+	CHECK(valueOf(keys, "HOMEBREW_ARG") == "sd:/roms/GBA/Metroid.gba");
 }
 
 TEST_CASE("relaunchKeys is empty for unsupported files") {
-	CHECK(relaunchKeys("sd:/roms/GBA/Metroid.sav").empty());
+	CHECK(relaunchKeys("sd:/roms/GBA/Metroid.sav", false).empty());
 }
 
 TEST_CASE("usesRsetMarker finds the 'RSET' constant anywhere in the ARM9 binary") {

@@ -30,6 +30,24 @@ vu32& relaunchMarkerSlot = *(vu32*)0x02000004;
 constexpr size_t kScanChunk = 16 * 1024;
 constexpr size_t kMarkerOverlap = 3; // keeps a constant split across two chunks findable
 
+// Classifies a .nds file the way TWiLight's ROM browser does. Non-DS files are never homebrew here.
+bool detectHomebrew(const std::string& romPath, bool& homebrew) {
+	homebrew = false;
+	if (romKindFor(romPath) != RomKind::Nds) return true;
+	FILE* f = fopen(romPath.c_str(), "rb");
+	if (!f) return false;
+	uint8_t header[kNdsHeaderSize];
+	uint8_t arm9Start[kArm9StartSize];
+	NdsHeaderInfo info;
+	const bool ok = fread(header, 1, sizeof(header), f) == sizeof(header)
+		&& parseNdsHeader(header, sizeof(header), info)
+		&& fseek(f, arm9EntryFileOffset(info), SEEK_SET) == 0
+		&& fread(arm9Start, 1, sizeof(arm9Start), f) == sizeof(arm9Start);
+	fclose(f);
+	if (ok) homebrew = isHomebrew(info, arm9Start);
+	return ok;
+}
+
 // Reads main.srldr's ARM9 binary in chunks and reports whether it uses the 'RSET' marker.
 bool detectRsetMarker(bool& rset) {
 	FILE* f = fopen(kMainSrldr, "rb");
@@ -93,8 +111,10 @@ bool replaceFile(const char* path, const std::string& data) {
 } // namespace
 
 LaunchError launchViaTwilight(const std::string& romPath, int* loaderCode) {
-	const std::vector<IniKey> keys = relaunchKeys(romPath);
-	if (keys.empty()) return LaunchError::Unsupported;
+	if (romKindFor(romPath) == RomKind::Unsupported) return LaunchError::Unsupported;
+	bool homebrew = false;
+	if (!detectHomebrew(romPath, homebrew)) return LaunchError::RomRead;
+	const std::vector<IniKey> keys = relaunchKeys(romPath, homebrew);
 
 	bool rset = false;
 	if (!detectRsetMarker(rset)) return LaunchError::MainRead;
@@ -121,6 +141,7 @@ const char* describe(LaunchError error) {
 	switch (error) {
 		case LaunchError::None: return "ok";
 		case LaunchError::Unsupported: return "unsupported file type";
+		case LaunchError::RomRead: return "could not read the ROM header";
 		case LaunchError::MainRead: return "could not read TWiLight main.srldr";
 		case LaunchError::SettingsRead: return "could not read TWiLight settings.ini";
 		case LaunchError::SettingsWrite: return "could not write TWiLight settings.ini";
