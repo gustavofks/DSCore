@@ -36,7 +36,8 @@ public:
 
 private:
 	BrowserState state() const;
-	void rebuildView(const std::string& keepPath);
+	enum class Missing { First, Clamp }; // where the cursor goes when the kept game is not listed
+	void rebuildView(const std::string& keepPath, Missing missing = Missing::Clamp);
 	void select(size_t cursor);
 	std::string activate(size_t index);
 

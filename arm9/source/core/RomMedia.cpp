@@ -1,6 +1,8 @@
 #include "core/RomMedia.h"
 
+#include <algorithm>
 #include <cstring>
+#include <vector>
 
 namespace dscore {
 
@@ -24,6 +26,13 @@ bool isAlnum(char c) {
 
 char upperAscii(char c) {
 	return (c >= 'a' && c <= 'z') ? char(c - 'a' + 'A') : c;
+}
+
+// Articles and "of" rarely tell titles apart.
+bool isMinorWord(std::string_view word) {
+	std::string lower;
+	for (char c : word) lower += (c >= 'A' && c <= 'Z') ? char(c - 'A' + 'a') : c;
+	return lower == "the" || lower == "a" || lower == "an" || lower == "of";
 }
 
 } // namespace
@@ -78,18 +87,42 @@ std::string titleFromFileName(std::string_view path) {
 }
 
 std::string initialsFor(std::string_view title) {
-	std::string initials;
-	bool wordStart = true;
-	for (char c : title) {
-		if (c == ' ') {
-			wordStart = true;
-			continue;
+	// Collections repeat their prefix ("Classic NES Series - ..."), so a subtitle tells games apart.
+	std::string_view part = title;
+	const size_t dash = title.rfind(" - ");
+	if (dash != std::string_view::npos) {
+		const std::string_view subtitle = title.substr(dash + 3);
+		for (char c : subtitle) {
+			if (isAlnum(c)) {
+				part = subtitle;
+				break;
+			}
 		}
-		if (wordStart && isAlnum(c)) {
-			initials += upperAscii(c);
+	}
+
+	std::vector<std::string_view> words;
+	std::vector<std::string_view> significant;
+	size_t pos = 0;
+	while (pos < part.size()) {
+		const size_t end = std::min(part.find(' ', pos), part.size());
+		const std::string_view word = part.substr(pos, end - pos);
+		if (!word.empty() && isAlnum(word.front())) {
+			words.push_back(word);
+			if (!isMinorWord(word)) significant.push_back(word);
+		}
+		pos = end + 1;
+	}
+	if (significant.empty()) significant = words;
+
+	std::string initials;
+	if (significant.size() >= 2) {
+		initials += upperAscii(significant[0].front());
+		initials += upperAscii(significant[1].front());
+	} else if (significant.size() == 1) {
+		for (char c : significant[0]) {
+			if (isAlnum(c)) initials += upperAscii(c);
 			if (initials.size() == 2) break;
 		}
-		wordStart = false;
 	}
 	return initials.empty() ? "?" : initials;
 }

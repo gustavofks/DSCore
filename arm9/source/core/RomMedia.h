@@ -36,7 +36,9 @@ bool parseGbaHeader(const uint8_t* rom, size_t len, GbaHeaderInfo& out);
 // tags such as regions and dump groups. Returns the bare name if stripping would leave nothing.
 std::string titleFromFileName(std::string_view path);
 
-// One or two uppercase initials for a generated tile, e.g. "MZ" for "Metroid Zero Mission".
+// Two uppercase characters for a generated tile: the first letters of the first two significant words
+// (of the subtitle after " - " when there is one), or the first two letters of a single word; "?" when
+// the title has no letters. E.g. "MZ" for "Metroid Zero Mission", "ME" for "Classic NES Series - Metroid".
 std::string initialsFor(std::string_view title);
 
 } // namespace dscore

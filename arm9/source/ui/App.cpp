@@ -10,12 +10,13 @@ namespace dscore {
 
 App::App(const LibraryData& library, UserData& userData, Config& config)
 	: library_(library), userData_(userData), config_(config) {
-	rebuildView(config_.selectedPath);
+	rebuildView(config_.selectedPath, Missing::First);
 }
 
 std::string App::handle(Action action, int touchX, int touchY) {
 	const GameEntry* current = selected();
-	const std::string currentPath = current ? current->path : std::string();
+	// An empty tab has no selection; keep following the last selected game.
+	const std::string currentPath = current ? current->path : config_.selectedPath;
 
 	switch (action) {
 		case Action::Up: select(moveCursor(cursor_, view_.size(), config_.view, Move::Up)); break;
@@ -33,7 +34,7 @@ std::string App::handle(Action action, int touchX, int touchY) {
 		case Action::NextTab:
 			config_.tab = action == Action::NextTab ? nextTab(config_.tab) : previousTab(config_.tab);
 			configChanged_ = true;
-			rebuildView(currentPath);
+			rebuildView(currentPath, Missing::First);
 			break;
 		case Action::ToggleView:
 			config_.view = config_.view == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
@@ -51,7 +52,7 @@ std::string App::handle(Action action, int touchX, int touchY) {
 				if (Tab(tab) == config_.tab) break;
 				config_.tab = Tab(tab);
 				configChanged_ = true;
-				rebuildView(currentPath);
+				rebuildView(currentPath, Missing::First);
 				break;
 			}
 			const int slot = config_.view == ViewMode::Grid ? layout::gridSlotAt(touchX, touchY)
@@ -92,10 +93,10 @@ BrowserState App::state() const {
 }
 
 // Recomputes the visible games and keeps keepPath under the cursor when it is still listed; otherwise
-// the cursor stays at the same position, clamped.
-void App::rebuildView(const std::string& keepPath) {
+// the cursor goes to the first game or stays at the same position, clamped.
+void App::rebuildView(const std::string& keepPath, Missing missing) {
 	view_ = libraryView(library_.games, userData_, config_.tab, config_.sort);
-	size_t cursor = std::min(cursor_, view_.empty() ? 0 : view_.size() - 1);
+	size_t cursor = missing == Missing::First ? 0 : std::min(cursor_, view_.empty() ? 0 : view_.size() - 1);
 	for (size_t i = 0; i < view_.size(); ++i) {
 		if (library_.games[view_[i]].path == keepPath) {
 			cursor = i;

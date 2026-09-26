@@ -66,6 +66,19 @@ TEST_CASE("App switches tabs and keeps the selection when it is listed") {
 	CHECK(app.selected()->system == System::Gba);
 }
 
+TEST_CASE("App starts a tab at its first game when the selection is not in it") {
+	const LibraryData lib = library(3, 2);
+	UserData data;
+	Config config;
+	config.selectedPath = "sd:/roms/NDS/102.nds";
+	App app(lib, data, config);
+	app.handle(Action::NextTab); // Favorites (empty)
+	app.handle(Action::NextTab); // DS: selection is listed
+	CHECK(app.selected()->path == "sd:/roms/NDS/102.nds");
+	app.handle(Action::NextTab); // GBA: selection is not listed
+	CHECK(app.selected()->path == "sd:/roms/GBA/100.gba");
+}
+
 TEST_CASE("App toggles favorites and reports user data changes") {
 	const LibraryData lib = library(2, 0);
 	UserData data;

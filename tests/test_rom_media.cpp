@@ -59,10 +59,13 @@ TEST_CASE("titleFromFileName strips extension and No-Intro tags") {
 	CHECK(titleFromFileName("(Weird).gba") == "(Weird)");
 }
 
-TEST_CASE("initialsFor picks up to two initials from the title") {
+TEST_CASE("initialsFor picks two initials that tell titles apart") {
 	CHECK(initialsFor("Metroid Zero Mission") == "MZ");
-	CHECK(initialsFor("Classic NES Series - Metroid") == "CN");
-	CHECK(initialsFor("tetris") == "T");
+	CHECK(initialsFor("Classic NES Series - Metroid") == "ME");       // subtitle after " - ", one word
+	CHECK(initialsFor("Classic NES Series - Super Mario Bros.") == "SM");
+	CHECK(initialsFor("Classic NES Series - The Legend of Zelda") == "LZ"); // articles skipped
+	CHECK(initialsFor("tetris") == "TE");
+	CHECK(initialsFor("The Simpsons - Road Rage") == "RR");
 	CHECK(initialsFor("  ") == "?");
-	CHECK(initialsFor("4273 - Pokemon") == "4P");
+	CHECK(initialsFor("Pokemon - ") == "PO");                          // empty subtitle: use the title
 }
