@@ -48,7 +48,6 @@ build-*/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
-Makefile
 install_manifest.txt
 compile_commands.json
 
@@ -67,3 +66,26 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Brainstorm visual companion
+.superpowers/
+
+# Planejamento local (não versionado): plano, decisões, pesquisa, specs e planos
+docs/plan.md
+docs/decisions.md
+docs/research/
+docs/superpowers/
+
+# Dados únicos do console (nunca versionar)
+*.bin.sha1
+nand*.bin
+bios7i*.bin
+bios9i*.bin
+firmware*.bin
+
+# devkitPro / DS build
+*.nds
+*.elf
+*.map
+/data/
+tests/build/
