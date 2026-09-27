@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "core/UserData.h"
@@ -29,8 +30,10 @@ SortKey nextSortKey(SortKey key);
 const char* tabLabel(Tab tab);
 const char* sortKeyLabel(SortKey key);
 
-// Indexes into games for one tab, in display order. The Recent tab lists played games newest first and
-// ignores sort; every other order breaks ties by title, then path.
-std::vector<size_t> libraryView(const std::vector<GameEntry>& games, const UserData& data, Tab tab, SortKey sort);
+// Indexes into games for one tab, in display order, keeping only titles that match query (see
+// matchesQuery). The Recent tab lists played games newest first and ignores sort; every other order
+// breaks ties by title, then path.
+std::vector<size_t> libraryView(const std::vector<GameEntry>& games, const UserData& data, Tab tab, SortKey sort,
+	std::string_view query = {});
 
 } // namespace dscore

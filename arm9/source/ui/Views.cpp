@@ -4,6 +4,7 @@
 
 #include "core/RomMedia.h"
 #include "core/Text.h"
+#include "ui/Keyboard.h"
 #include "ui/Layout.h"
 #include "ui/Navigation.h"
 #include "ui/Palette.h"
@@ -151,7 +152,8 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 	canvas.fill(palette::kBackground);
 	canvas.fillRect({0, 0, kScreenW, kHeaderH}, palette::kSurface);
 	const int headerY = (kHeaderH - smallFont().height) / 2;
-	canvas.drawText(smallFont(), 4, headerY, "DSCore", palette::kAccent);
+	const std::string title = state.query.empty() ? "DSCore" : "Search: " + std::string(state.query);
+	canvas.drawText(smallFont(), 4, headerY, ellipsize(smallFont(), title, kScreenW / 2), palette::kAccent);
 	const GameEntry* game = selectedGame(state);
 	if (game) {
 		const std::string position = std::to_string(state.cursor + 1) + "/" + std::to_string(state.view->size());
@@ -198,7 +200,7 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 	}
 
 	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, palette::kSurface);
-	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, "A:Play Y:Fav L/R:Tab START:Sort SEL:View",
+	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, state.query.empty() ? "A:Play X:Find Y:Fav START:Sort SEL:View" : "A:Play X:Find B:Clear search Y:Fav",
 		palette::kMuted);
 }
 
@@ -219,6 +221,48 @@ void drawBrowserItem(Canvas& canvas, const BrowserState& state, size_t index) {
 	if (index >= state.view->size()) return;
 	if (state.mode == ViewMode::Grid) drawGridCell(canvas, state, index);
 	else drawListRow(canvas, state, index);
+}
+
+void drawSearchScreen(Canvas& canvas, const BrowserState& state) {
+	canvas.fill(palette::kBackground);
+	canvas.fillRect({0, 0, kScreenW, kHeaderH}, palette::kSurface);
+	canvas.drawText(smallFont(), 4, (kHeaderH - smallFont().height) / 2, "Search", palette::kAccent);
+
+	const Rect field = {8, kHeaderH + 8, kScreenW - 16, largeFont().height + 8};
+	canvas.fillRect(field, palette::kSurfaceHigh);
+	canvas.fillRect({field.x, field.y + field.h - 2, field.w, 2}, palette::kAccent);
+	const std::string shown = std::string(state.query) + "_";
+	const int maxChars = (field.w - 8) / largeFont().width;
+	const std::string tail = int(shown.size()) > maxChars ? shown.substr(shown.size() - size_t(maxChars)) : shown;
+	canvas.drawText(largeFont(), field.x + 4, field.y + 4, tail, palette::kText);
+
+	const size_t count = state.view->size();
+	int y = field.y + field.h + 6;
+	const std::string summary = count == 1 ? "1 game" : std::to_string(count) + " games";
+	canvas.drawText(smallFont(), 8, y, state.query.empty() ? "Type a name" : summary, palette::kMuted);
+	y += smallFont().height + 6;
+	for (size_t i = 0; i < count && y + smallFont().height <= kHintBarY - 2; ++i, y += smallFont().height + 3) {
+		const GameEntry& game = state.library->games[(*state.view)[i]];
+		canvas.drawText(smallFont(), 8, y, ellipsize(smallFont(), game.title, kScreenW - 16), palette::kText);
+	}
+
+	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, palette::kSurface);
+	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, "A:Type B:Delete START:Done", palette::kMuted);
+}
+
+void drawKeyboardScreen(Canvas& canvas, int selectedKey) {
+	canvas.fill(palette::kBackground);
+	drawCentered(canvas, smallFont(), {0, 0, kScreenW, 22}, "Type part of a game's name", palette::kMuted);
+	const std::vector<Key>& keys = keyboardKeys();
+	for (size_t i = 0; i < keys.size(); ++i) {
+		const Key& key = keys[i];
+		const bool selected = int(i) == selectedKey;
+		canvas.fillRect(key.rect, selected ? palette::kAccent : palette::kSurfaceHigh);
+		const Font& font = key.kind == KeyKind::Char ? largeFont() : smallFont();
+		drawCentered(canvas, font, key.rect, key.label, palette::kText);
+	}
+	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, palette::kSurface);
+	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, "Touch or use the D-pad", palette::kMuted);
 }
 
 void drawMessageScreen(Canvas& canvas, const std::string& title, const std::vector<std::string>& lines) {

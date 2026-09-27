@@ -101,6 +101,8 @@ std::string handleInput(App& app) {
 	if (repeat & KEY_LEFT) apply(Action::Left);
 	if (repeat & KEY_RIGHT) apply(Action::Right);
 	if (down & KEY_A) apply(Action::Launch);
+	if (down & KEY_B) apply(Action::Back);
+	if (down & KEY_X) apply(Action::Search);
 	if (down & KEY_Y) apply(Action::Favorite);
 	if (down & KEY_L) apply(Action::PrevTab);
 	if (down & KEY_R) apply(Action::NextTab);

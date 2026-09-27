@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "core/Config.h"
@@ -19,6 +20,7 @@ struct BrowserState {
 	const UserData* userData = nullptr;
 	IconCache* icons = nullptr;                 // decoded icons, filled while drawing
 	const Cover* cover = nullptr;               // box art of the selected game, when loaded
+	std::string_view query;                     // active search filter, empty when none
 	const std::vector<size_t>* view = nullptr; // indexes into library->games for the current tab
 	size_t cursor = 0;                          // position in view
 	Tab tab = Tab::All;
@@ -40,6 +42,12 @@ void drawBrowserScreen(Canvas& canvas, const BrowserState& state);
 // Redraws one game of the current page (a grid cell or list row) over what drawBrowserScreen drew,
 // e.g. to move the selection without redrawing the whole screen.
 void drawBrowserItem(Canvas& canvas, const BrowserState& state, size_t index);
+
+// Top screen while searching: the query and the first matching games.
+void drawSearchScreen(Canvas& canvas, const BrowserState& state);
+
+// Bottom screen while searching: the on-screen keyboard with the key under the cursor highlighted.
+void drawKeyboardScreen(Canvas& canvas, int selectedKey);
 
 // Full-screen message, e.g. while indexing or after an error.
 void drawMessageScreen(Canvas& canvas, const std::string& title, const std::vector<std::string>& lines);

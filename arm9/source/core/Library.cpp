@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "core/Search.h"
+
 namespace dscore {
 
 namespace {
@@ -77,12 +79,16 @@ const char* sortKeyLabel(SortKey key) {
 	return "";
 }
 
-std::vector<size_t> libraryView(const std::vector<GameEntry>& games, const UserData& data, Tab tab, SortKey sort) {
+std::vector<size_t> libraryView(const std::vector<GameEntry>& games, const UserData& data, Tab tab, SortKey sort,
+	std::string_view query) {
 	std::vector<size_t> view;
 	std::vector<GameStats> stats(games.size());
+	const std::string folded = foldForSearch(query);
 	for (size_t i = 0; i < games.size(); ++i) {
 		stats[i] = statsFor(data, games[i]);
-		if (inTab(games[i], stats[i], tab)) view.push_back(i);
+		if (!inTab(games[i], stats[i], tab)) continue;
+		if (!folded.empty() && foldForSearch(games[i].title).find(folded) == std::string::npos) continue;
+		view.push_back(i);
 	}
 
 	std::stable_sort(view.begin(), view.end(), [&](size_t a, size_t b) {

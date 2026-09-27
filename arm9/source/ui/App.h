@@ -12,7 +12,9 @@
 
 namespace dscore {
 
-enum class Action : uint8_t { Up, Down, Left, Right, Launch, Favorite, PrevTab, NextTab, ToggleView, CycleSort, Tap };
+enum class Action : uint8_t {
+	Up, Down, Left, Right, Launch, Back, Favorite, PrevTab, NextTab, ToggleView, CycleSort, Search, Tap
+};
 
 // Library browser state and input handling, independent of the hardware: the caller feeds actions,
 // draws when asked and persists user data and config when they change.
@@ -31,6 +33,8 @@ public:
 	void invalidate();
 
 	const GameEntry* selected() const;
+	bool searching() const { return searching_; }
+	const std::string& query() const { return query_; }
 
 	// Box art for the game at path (nullopt when it has none); shown while that game is selected.
 	void setCover(const std::string& path, std::optional<Cover> cover);
@@ -52,6 +56,13 @@ private:
 	Config& config_;
 	std::vector<size_t> view_;
 	mutable IconCache icons_; // drawing is const but warms the cache
+	void handleSearch(Action action, int touchX, int touchY);
+	void pressKey(int index);
+	void setSearching(bool searching);
+
+	bool searching_ = false; // the keyboard is on screen
+	std::string query_;      // filter applied to every tab, typed with the keyboard
+	int keyIndex_ = 0;
 	std::string coverPath_;
 	std::optional<Cover> cover_;
 	// The bottom screen keeps its pixels between frames: a cursor move within the page only redraws the

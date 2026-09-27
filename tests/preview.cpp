@@ -12,6 +12,7 @@
 #include "platform/FileIo.h"
 #include "platform/RomFiles.h"
 #include "ui/App.h"
+#include "ui/Keyboard.h"
 #include "ui/Layout.h"
 #include "ui/Views.h"
 
@@ -88,6 +89,17 @@ int main(int argc, char** argv) {
 	app.handle(Action::ToggleView);
 	app.handle(Action::NextTab);
 	shot(app, "5-recent-list");
+
+	app.handle(Action::ToggleView);
+	app.handle(Action::NextTab); // back to All
+	app.handle(Action::Search);
+	for (char c : std::string("MARIO")) {
+		const Rect& key = keyboardKeys()[size_t(keyIndexFor(c))].rect;
+		app.handle(Action::Tap, key.x + 2, key.y + 2);
+	}
+	shot(app, "7-search");
+	app.handle(Action::CycleSort); // START finishes the search
+	shot(app, "8-search-results");
 
 	drawMessageScreen(topCanvas, "DSCore", {"Loading library..."});
 	drawMessageScreen(bottomCanvas, "Indexing games", {"42 / 324", "Super Mario 64 DS"});

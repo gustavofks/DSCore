@@ -196,3 +196,62 @@ TEST_CASE("App shows a cover only while its game is selected") {
 	app.setCover("sd:/roms/NDS/100.nds", std::nullopt); // not the selected game: no redraw needed
 	CHECK_FALSE(app.takeRedraw());
 }
+
+#include "ui/Keyboard.h"
+
+namespace {
+
+void tapKey(App& app, char value) {
+	const Rect& r = keyboardKeys()[size_t(keyIndexFor(value))].rect;
+	app.handle(Action::Tap, r.x + 2, r.y + 2);
+}
+
+} // namespace
+
+TEST_CASE("App search filters as you type and keeps the filter after OK") {
+	LibraryData lib;
+	lib.games.push_back({"sd:/roms/NDS/a.nds", "Mario Kart DS", System::Nds, "", 0, -1});
+	lib.games.push_back({"sd:/roms/NDS/b.nds", "Zelda", System::Nds, "", 0, -1});
+	lib.games.push_back({"sd:/roms/GBA/c.gba", "Metroid Fusion", System::Gba, "", 0, -1});
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+
+	app.handle(Action::Search);
+	CHECK(app.searching());
+	tapKey(app, 'Z');
+	CHECK(app.query() == "Z");
+	CHECK(app.selected()->title == "Zelda");
+	CHECK(app.handle(Action::Launch).empty()); // A types the key under the cursor, it never launches
+	CHECK(app.query() == "ZZ");
+	app.handle(Action::Back);                  // B deletes
+	CHECK(app.query() == "Z");
+
+	tapKey(app, '\n'); // OK
+	CHECK_FALSE(app.searching());
+	CHECK(app.query() == "Z");
+	CHECK(app.handle(Action::Launch) == "sd:/roms/NDS/b.nds");
+
+	app.handle(Action::Back); // clears the filter
+	CHECK(app.query().empty());
+	CHECK(app.selected() != nullptr);
+}
+
+TEST_CASE("App search: B deletes, then leaves; the D-pad moves between keys") {
+	const LibraryData lib = library(3, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	app.handle(Action::Search);
+	app.handle(Action::Launch); // types the key under the cursor ('A' at start)
+	CHECK(app.query() == "A");
+	app.handle(Action::Right);
+	app.handle(Action::Launch);
+	CHECK(app.query() == "AS");
+	app.handle(Action::Back);
+	CHECK(app.query() == "A");
+	app.handle(Action::Back);
+	app.handle(Action::Back); // nothing left to delete: leaves the keyboard
+	CHECK_FALSE(app.searching());
+	CHECK(app.query().empty());
+}
