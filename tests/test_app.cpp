@@ -132,3 +132,42 @@ TEST_CASE("App draws both screens without crashing on an empty library") {
 	app.drawBottom(canvas);
 	CHECK(app.handle(Action::Launch).empty());
 }
+
+TEST_CASE("App partial redraws match a full redraw") {
+	const LibraryData lib = library(20, 5);
+	UserData data;
+	for (ViewMode mode : {ViewMode::Grid, ViewMode::List}) {
+		Config config;
+		config.view = mode;
+		App app(lib, data, config);
+		std::vector<uint16_t> kept(layout::kScreenW * layout::kScreenH), fresh(kept.size());
+		Canvas keptCanvas(kept.data(), layout::kScreenW, layout::kScreenH);
+		Canvas freshCanvas(fresh.data(), layout::kScreenW, layout::kScreenH);
+		app.drawBottom(keptCanvas);
+		for (Action move : {Action::Right, Action::Down, Action::Down, Action::Left, Action::Down, Action::Up}) {
+			app.handle(move);
+			app.drawBottom(keptCanvas); // partial when the page did not change
+
+			Config sameConfig = config;
+			App reference(lib, data, sameConfig);
+			reference.drawBottom(freshCanvas);
+			CHECK(kept == fresh);
+		}
+	}
+}
+
+TEST_CASE("App redraws everything after invalidate") {
+	const LibraryData lib = library(3, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	std::vector<uint16_t> pixels(layout::kScreenW * layout::kScreenH);
+	Canvas canvas(pixels.data(), layout::kScreenW, layout::kScreenH);
+	app.drawBottom(canvas);
+	app.takeRedraw();
+	canvas.fill(0x801F); // something else drew over the screen
+	app.invalidate();
+	CHECK(app.takeRedraw());
+	app.drawBottom(canvas);
+	CHECK(pixels[size_t(layout::kScreenW) * layout::kScreenH / 2] != 0x801F);
+}

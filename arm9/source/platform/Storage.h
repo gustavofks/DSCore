@@ -22,7 +22,8 @@ bool saveUserData(const UserData& userData);
 Config loadConfig();
 bool saveConfig(const Config& config);
 
-// Overwrites the boot log with text (timings for tuning on real hardware).
+// Overwrites the log with text (timings for tuning on real hardware); appendLog adds to it.
 void writeBootLog(const std::string& text);
+void appendLog(const std::string& text);
 
 } // namespace dscore::storage

@@ -65,4 +65,11 @@ void writeBootLog(const std::string& text) {
 	writeFile(kBootLogPath, text.data(), text.size());
 }
 
+void appendLog(const std::string& text) {
+	std::string log;
+	readFile(kBootLogPath, log);
+	log += text;
+	writeFile(kBootLogPath, log.data(), log.size());
+}
+
 } // namespace dscore::storage
