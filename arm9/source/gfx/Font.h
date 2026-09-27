@@ -5,6 +5,8 @@
 #include <string_view>
 #include <vector>
 
+#include "core/Text.h"
+
 namespace dscore {
 
 // Fixed-cell bitmap font covering U+0020..U+00FF; other characters render as '?'.
@@ -19,9 +21,6 @@ struct Font {
 
 const Font& smallFont(); // Spleen 6x12
 const Font& largeFont(); // Spleen 8x16
-
-// Decodes UTF-8 into codepoints; malformed bytes become U+FFFD.
-std::vector<uint32_t> decodeUtf8(std::string_view text);
 
 // Width in pixels of text drawn in font.
 int textWidth(const Font& font, std::string_view text);

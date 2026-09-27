@@ -11,7 +11,6 @@ namespace {
 
 constexpr uint32_t kFirst = 0x20;
 constexpr uint32_t kLast = 0xFF;
-constexpr uint32_t kReplacement = 0xFFFD;
 constexpr std::string_view kEllipsis = "...";
 
 const Font kSmall = {kSpleen6x12Width, kSpleen6x12Height, &kSpleen6x12Glyphs[0][0]};
@@ -46,33 +45,6 @@ const uint8_t* Font::glyph(uint32_t codepoint) const {
 
 const Font& smallFont() { return kSmall; }
 const Font& largeFont() { return kLarge; }
-
-std::vector<uint32_t> decodeUtf8(std::string_view text) {
-	std::vector<uint32_t> out;
-	for (size_t i = 0; i < text.size();) {
-		const unsigned char c = static_cast<unsigned char>(text[i]);
-		int extra = 0;
-		uint32_t cp = c;
-		if (c >= 0xF8) { out.push_back(kReplacement); ++i; continue; }
-		if (c >= 0xF0) { extra = 3; cp = c & 0x07; }
-		else if (c >= 0xE0) { extra = 2; cp = c & 0x0F; }
-		else if (c >= 0xC0) { extra = 1; cp = c & 0x1F; }
-		else if (c >= 0x80) { out.push_back(kReplacement); ++i; continue; }
-		if (i + size_t(extra) >= text.size() && extra > 0) { // truncated sequence
-			out.push_back(kReplacement);
-			break;
-		}
-		bool valid = true;
-		for (int k = 1; k <= extra; ++k) {
-			const unsigned char cc = static_cast<unsigned char>(text[i + size_t(k)]);
-			if ((cc & 0xC0) != 0x80) valid = false;
-			cp = (cp << 6) | (cc & 0x3F);
-		}
-		out.push_back(valid ? cp : kReplacement);
-		i += size_t(extra) + 1;
-	}
-	return out;
-}
 
 int textWidth(const Font& font, std::string_view text) {
 	return int(characterCount(text)) * font.width;
