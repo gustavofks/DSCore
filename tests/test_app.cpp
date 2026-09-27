@@ -171,3 +171,28 @@ TEST_CASE("App redraws everything after invalidate") {
 	app.drawBottom(canvas);
 	CHECK(pixels[size_t(layout::kScreenW) * layout::kScreenH / 2] != 0x801F);
 }
+
+TEST_CASE("App shows a cover only while its game is selected") {
+	const LibraryData lib = library(2, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	std::vector<uint16_t> withCover(layout::kScreenW * layout::kScreenH), without(withCover.size());
+	Canvas withCanvas(withCover.data(), layout::kScreenW, layout::kScreenH);
+	Canvas withoutCanvas(without.data(), layout::kScreenW, layout::kScreenH);
+
+	app.drawTop(withoutCanvas);
+	app.takeRedraw();
+	Cover cover;
+	cover.width = cover.height = 4;
+	cover.pixels.assign(16, 0x801F);
+	app.setCover("sd:/roms/NDS/100.nds", cover);
+	CHECK(app.takeRedraw());
+	app.drawTop(withCanvas);
+	CHECK(withCover != without);
+
+	app.handle(Action::Right); // another game is selected now
+	app.takeRedraw();
+	app.setCover("sd:/roms/NDS/100.nds", std::nullopt); // not the selected game: no redraw needed
+	CHECK_FALSE(app.takeRedraw());
+}

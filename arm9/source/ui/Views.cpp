@@ -152,20 +152,28 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 	canvas.fillRect({0, 0, kScreenW, kHeaderH}, palette::kSurface);
 	const int headerY = (kHeaderH - smallFont().height) / 2;
 	canvas.drawText(smallFont(), 4, headerY, "DSCore", palette::kAccent);
-	if (state.view && !state.view->empty()) {
+	const GameEntry* game = selectedGame(state);
+	if (game) {
 		const std::string position = std::to_string(state.cursor + 1) + "/" + std::to_string(state.view->size());
-		canvas.drawText(smallFont(), kScreenW - 4 - textWidth(smallFont(), position), headerY, position, palette::kMuted);
+		const int positionX = kScreenW - 4 - textWidth(smallFont(), position);
+		canvas.drawText(smallFont(), positionX, headerY, position, palette::kMuted);
+		if (isFavorite(state, *game)) drawStar(canvas, positionX - 14, (kHeaderH - 9) / 2, palette::kFavorite);
 	}
 
-	const GameEntry* game = selectedGame(state);
 	if (!game) {
 		const Rect middle = {0, kHeaderH, kScreenW, kHintBarY - kHeaderH};
 		drawCentered(canvas, largeFont(), {middle.x, middle.y + middle.h / 2 - 20, middle.w, 20}, "No games here", palette::kText);
 		drawCentered(canvas, smallFont(), {middle.x, middle.y + middle.h / 2 + 4, middle.w, 14},
 			state.tab == Tab::All ? "Add ROMs to sd:/roms/NDS or sd:/roms/GBA" : "Press L/R to change tab", palette::kMuted);
 	} else {
-		canvas.fillRect({12, 28, 104, 104}, palette::kSurface);
-		drawGameTile(canvas, *state.library, *state.icons, *game, 16, 32, 96);
+		const Rect art = {8, 24, 112, 112};
+		canvas.fillRect(art, palette::kSurface);
+		if (state.cover) {
+			canvas.blit(state.cover->pixels.data(), state.cover->width, state.cover->height,
+				art.x + (art.w - state.cover->width) / 2, art.y + (art.h - state.cover->height) / 2);
+		} else {
+			drawGameTile(canvas, *state.library, *state.icons, *game, art.x + 8, art.y + 8, 96);
+		}
 
 		const int textX = 126;
 		const int textW = kScreenW - textX - 8;
@@ -184,12 +192,9 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 			canvas.drawText(smallFont(), textX, y, ellipsize(smallFont(), line, textW), palette::kMuted);
 			y += smallFont().height + 2;
 		}
-		if (stats && stats->favorite) {
-			drawStar(canvas, textX, y + 2, palette::kFavorite);
-			canvas.drawText(smallFont(), textX + 13, y + 1, "Favorite", palette::kFavorite);
-		}
 		// The file name tells apart dumps with the same title.
-		canvas.drawText(smallFont(), 12, 142, ellipsize(smallFont(), fileName(game->path), kScreenW - 24), palette::kMuted);
+		canvas.drawText(smallFont(), 8, kHintBarY - smallFont().height - 4, ellipsize(smallFont(), fileName(game->path), kScreenW - 16),
+			palette::kMuted);
 	}
 
 	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, palette::kSurface);

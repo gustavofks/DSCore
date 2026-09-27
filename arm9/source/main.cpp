@@ -25,6 +25,7 @@ using namespace dscore;
 const std::vector<std::string> kRomRoots = {"sd:/roms/NDS", "sd:/roms/GBA"};
 constexpr int kConfigSaveDelayFrames = 120; // batch cursor moves into one SD write
 constexpr size_t kProgressEvery = 8;        // redraw the indexing screen every few games
+constexpr int kCoverDelayFrames = 8;        // load box art once the cursor rests, not while scrolling
 
 // Milliseconds since boot, from the cascaded timers started in main().
 unsigned elapsedMs() {
@@ -113,6 +114,35 @@ std::string handleInput(App& app) {
 	return launch;
 }
 
+// Loads the selected game's box art after the cursor has rested for a few frames, remembering games
+// that have none so their file is not looked up again.
+class CoverLoader {
+public:
+	void update(App& app) {
+		const GameEntry* game = app.selected();
+		const std::string path = game ? game->path : std::string();
+		if (path != pending_) {
+			pending_ = path;
+			restingFrames_ = 0;
+			return;
+		}
+		if (path.empty() || path == loaded_ || ++restingFrames_ < kCoverDelayFrames) return;
+		loaded_ = path;
+		std::optional<Cover> cover;
+		if (!missing_.count(path)) {
+			cover = storage::loadCover(path);
+			if (!cover) missing_.insert(path);
+		}
+		app.setCover(path, std::move(cover));
+	}
+
+private:
+	std::string pending_;
+	std::string loaded_;
+	int restingFrames_ = 0;
+	std::set<std::string> missing_;
+};
+
 // Drawing cost of the frames since boot, logged before each launch.
 struct DrawStats {
 	unsigned frames = 0;
@@ -183,6 +213,7 @@ int main(int argc, char** argv) {
 	keysSetRepeat(15, 4);
 	int configSaveCountdown = -1;
 	DrawStats drawStats;
+	CoverLoader covers;
 	while (true) {
 		if (powerButtonPressed()) {
 			if (configSaveCountdown > 0) storage::saveConfig(config);
@@ -196,6 +227,7 @@ int main(int argc, char** argv) {
 			app.invalidate();
 			continue;
 		}
+		covers.update(app);
 		if (app.takeUserDataChanged()) storage::saveUserData(userData);
 		if (app.takeConfigChanged()) configSaveCountdown = kConfigSaveDelayFrames;
 		if (configSaveCountdown > 0 && --configSaveCountdown == 0) storage::saveConfig(config);

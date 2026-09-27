@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "core/Config.h"
+#include "core/Cover.h"
 #include "core/LibraryCache.h"
 #include "core/UserData.h"
 #include "gfx/Canvas.h"
@@ -17,6 +18,7 @@ struct BrowserState {
 	const LibraryData* library = nullptr;
 	const UserData* userData = nullptr;
 	IconCache* icons = nullptr;                 // decoded icons, filled while drawing
+	const Cover* cover = nullptr;               // box art of the selected game, when loaded
 	const std::vector<size_t>* view = nullptr; // indexes into library->games for the current tab
 	size_t cursor = 0;                          // position in view
 	Tab tab = Tab::All;

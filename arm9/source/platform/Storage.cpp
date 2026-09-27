@@ -52,6 +52,12 @@ bool saveUserData(const UserData& userData) {
 	return saveText(kUserDataPath, userData.serialize());
 }
 
+std::optional<Cover> loadCover(const std::string& romPath) {
+	std::vector<uint8_t> bytes;
+	if (!readFile(std::string(kDataDir) + "/covers/" + coverFileName(romPath), bytes)) return std::nullopt;
+	return decodeCover(bytes.data(), bytes.size());
+}
+
 Config loadConfig() {
 	std::string text;
 	return readFile(kConfigPath, text) ? Config::parse(text) : Config{};

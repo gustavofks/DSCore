@@ -83,6 +83,13 @@ void App::drawBottom(Canvas& canvas) const {
 	drawnCursor_ = cursor_;
 }
 
+void App::setCover(const std::string& path, std::optional<Cover> cover) {
+	coverPath_ = path;
+	cover_ = std::move(cover);
+	const GameEntry* game = selected();
+	if (game && game->path == path) redraw_ = true;
+}
+
 void App::invalidate() {
 	bottomValid_ = false;
 	redraw_ = true;
@@ -101,6 +108,8 @@ BrowserState App::state() const {
 	s.library = &library_;
 	s.userData = &userData_;
 	s.icons = &icons_;
+	const GameEntry* game = selected();
+	s.cover = (cover_ && game && game->path == coverPath_) ? &*cover_ : nullptr;
 	s.view = &view_;
 	s.cursor = cursor_;
 	s.tab = config_.tab;

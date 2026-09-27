@@ -32,6 +32,9 @@ public:
 
 	const GameEntry* selected() const;
 
+	// Box art for the game at path (nullopt when it has none); shown while that game is selected.
+	void setCover(const std::string& path, std::optional<Cover> cover);
+
 	// Each flag is cleared when read.
 	bool takeRedraw();
 	bool takeUserDataChanged();
@@ -49,6 +52,8 @@ private:
 	Config& config_;
 	std::vector<size_t> view_;
 	mutable IconCache icons_; // drawing is const but warms the cache
+	std::string coverPath_;
+	std::optional<Cover> cover_;
 	// The bottom screen keeps its pixels between frames: a cursor move within the page only redraws the
 	// two games involved. Anything else invalidates it.
 	mutable bool bottomValid_ = false;
