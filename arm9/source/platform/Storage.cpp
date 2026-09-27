@@ -1,8 +1,11 @@
 #include "platform/Storage.h"
 
+#include <algorithm>
+#include <dirent.h>
 #include <string>
 #include <vector>
 
+#include "core/Text.h"
 #include "platform/FileIo.h"
 
 namespace dscore::storage {
@@ -56,6 +59,25 @@ std::optional<Cover> loadCover(const std::string& romPath) {
 	std::vector<uint8_t> bytes;
 	if (!readFile(std::string(kDataDir) + "/covers/" + coverFileName(romPath), bytes)) return std::nullopt;
 	return decodeCover(bytes.data(), bytes.size());
+}
+
+std::vector<Theme> loadThemes() {
+	std::vector<Theme> themes = builtInThemes();
+	const std::string dir = std::string(kDataDir) + "/themes";
+	std::vector<std::string> files;
+	if (DIR* d = opendir(dir.c_str())) {
+		while (dirent* entry = readdir(d)) {
+			if (entry->d_name[0] != '.' && hasExtension(entry->d_name, ".ini")) files.push_back(entry->d_name);
+		}
+		closedir(d);
+	}
+	std::sort(files.begin(), files.end());
+	for (const std::string& file : files) {
+		std::string text;
+		if (!readFile(dir + "/" + file, text)) continue;
+		themes.push_back(parseTheme(text, themes[0], file.substr(0, file.size() - 4)));
+	}
+	return themes;
 }
 
 Config loadConfig() {

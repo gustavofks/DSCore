@@ -15,6 +15,7 @@ struct Config {
 	SortKey sort = SortKey::Name;
 	ViewMode view = ViewMode::Grid;
 	std::string selectedPath; // game under the cursor
+	std::string theme;        // theme name; empty = the default theme
 
 	std::string serialize() const;
 	static Config parse(std::string_view ini); // unknown or invalid values keep their defaults

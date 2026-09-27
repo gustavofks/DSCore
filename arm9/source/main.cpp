@@ -27,6 +27,9 @@ constexpr int kConfigSaveDelayFrames = 120; // batch cursor moves into one SD wr
 constexpr size_t kProgressEvery = 8;        // redraw the indexing screen every few games
 constexpr int kCoverDelayFrames = 8;        // load box art once the cursor rests, not while scrolling
 
+// Theme of the message screens (loading, errors); follows the one chosen in the options menu.
+const Theme* messageTheme = &builtInThemes()[0];
+
 // Milliseconds since boot, from the cascaded timers started in main().
 unsigned elapsedMs() {
 	return timerTicks2msec(cpuGetTiming());
@@ -34,8 +37,8 @@ unsigned elapsedMs() {
 
 void showMessage(Screens& screens, const std::string& topTitle, const std::vector<std::string>& topLines,
 	const std::string& bottomTitle, const std::vector<std::string>& bottomLines) {
-	drawMessageScreen(screens.top(), topTitle, topLines);
-	drawMessageScreen(screens.bottom(), bottomTitle, bottomLines);
+	drawMessageScreen(screens.top(), *messageTheme, topTitle, topLines);
+	drawMessageScreen(screens.bottom(), *messageTheme, bottomTitle, bottomLines);
 	screens.present();
 }
 
@@ -49,12 +52,12 @@ BannerLanguage systemLanguage() {
 	return language <= int(BannerLanguage::Spanish) ? BannerLanguage(language) : BannerLanguage::English;
 }
 
-// Loads the cached library and brings it up to date with the SD card, showing progress while new
-// games are indexed. Appends timings to log.
-LibraryData loadLibrary(Screens& screens, std::string& log) {
+// Loads the cached library (unless rebuilding) and brings it up to date with the SD card, showing
+// progress while new games are indexed. Appends timings to log.
+LibraryData loadLibrary(Screens& screens, std::string& log, bool rebuild = false) {
 	LibraryData library;
 	unsigned start = elapsedMs();
-	const bool cached = storage::loadLibrary(library);
+	const bool cached = !rebuild && storage::loadLibrary(library);
 	log += "cache: " + std::string(cached ? "loaded" : "missing") + ", " + std::to_string(library.games.size()) +
 	       " games, " + std::to_string(elapsedMs() - start) + " ms\n";
 
@@ -107,7 +110,7 @@ std::string handleInput(App& app) {
 	if (down & KEY_L) apply(Action::PrevTab);
 	if (down & KEY_R) apply(Action::NextTab);
 	if (down & KEY_SELECT) apply(Action::ToggleView);
-	if (down & KEY_START) apply(Action::CycleSort);
+	if (down & KEY_START) apply(Action::Menu);
 	if (down & KEY_TOUCH) {
 		touchPosition touch;
 		touchRead(&touch);
@@ -198,9 +201,12 @@ int main(int argc, char** argv) {
 
 	std::string log = "DSCore boot\n";
 	Config config = storage::loadConfig();
+	const std::vector<Theme> themes = storage::loadThemes();
+	messageTheme = &findTheme(themes, config.theme);
 	UserData userData = storage::loadUserData();
-	const LibraryData library = loadLibrary(screens, log);
+	LibraryData library = loadLibrary(screens, log);
 	App app(library, userData, config);
+	app.setThemes(themes);
 	log += "ready: " + std::to_string(elapsedMs()) + " ms since start\n";
 
 	// One full redraw of both screens: the cost of every cursor move.
@@ -229,6 +235,13 @@ int main(int argc, char** argv) {
 			app.invalidate();
 			continue;
 		}
+		if (app.takeRebuildRequest()) {
+			std::string rebuildLog = "rebuild\n";
+			library = loadLibrary(screens, rebuildLog, true);
+			storage::appendLog(rebuildLog);
+			app.libraryChanged();
+		}
+		messageTheme = &app.theme();
 		covers.update(app);
 		if (app.takeUserDataChanged()) storage::saveUserData(userData);
 		if (app.takeConfigChanged()) configSaveCountdown = kConfigSaveDelayFrames;

@@ -29,7 +29,12 @@ constexpr int kGridPerPage = kGridCols * kGridRows;
 constexpr int kListRowH = 16;
 constexpr int kListRows = kContentH / kListRowH;
 
+// Options menu (bottom screen).
+constexpr int kMenuTop = 28;
+constexpr int kMenuRowH = 26;
+
 Rect tabRect(int index);
+Rect menuRowRect(int row);
 Rect gridCellRect(int slot); // slot 0..kGridPerPage-1 on the current page
 Rect listRowRect(int row);
 
@@ -37,6 +42,7 @@ Rect listRowRect(int row);
 int tabAt(int x, int y);
 int gridSlotAt(int x, int y);
 int listRowAt(int x, int y);
+int menuRowAt(int x, int y, int rows);
 
 } // namespace layout
 

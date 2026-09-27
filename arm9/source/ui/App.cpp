@@ -15,6 +15,10 @@ App::App(const LibraryData& library, UserData& userData, Config& config)
 }
 
 std::string App::handle(Action action, int touchX, int touchY) {
+	if (menuOpen_) {
+		handleMenu(action, touchX, touchY);
+		return {};
+	}
 	if (searching_) {
 		handleSearch(action, touchX, touchY);
 		return {};
@@ -55,10 +59,8 @@ std::string App::handle(Action action, int touchX, int touchY) {
 			bottomValid_ = false;
 			redraw_ = true;
 			break;
-		case Action::CycleSort:
-			config_.sort = nextSortKey(config_.sort);
-			configChanged_ = true;
-			rebuildView(currentPath);
+		case Action::Menu:
+			setMenuOpen(true);
 			break;
 		case Action::Tap: {
 			const int tab = layout::tabAt(touchX, touchY);
@@ -85,8 +87,13 @@ void App::drawTop(Canvas& canvas) const {
 
 void App::drawBottom(Canvas& canvas) const {
 	const BrowserState s = state();
+	if (menuOpen_) {
+		drawMenuScreen(canvas, *theme_, menuItems(), menuRow_);
+		bottomValid_ = false;
+		return;
+	}
 	if (searching_) {
-		drawKeyboardScreen(canvas, keyIndex_);
+		drawKeyboardScreen(canvas, *theme_, keyIndex_);
 		bottomValid_ = false;
 		return;
 	}
@@ -109,6 +116,26 @@ void App::setCover(const std::string& path, std::optional<Cover> cover) {
 	if (game && game->path == path) redraw_ = true;
 }
 
+void App::setTheme(const Theme& theme) {
+	theme_ = &theme;
+	invalidate();
+}
+
+void App::setThemes(const std::vector<Theme>& themes) {
+	themes_ = &themes;
+	setTheme(findTheme(themes, config_.theme));
+}
+
+void App::libraryChanged() {
+	icons_.clear();
+	cover_.reset();
+	coverPath_.clear();
+	rebuildView(config_.selectedPath, Missing::First);
+	invalidate();
+}
+
+bool App::takeRebuildRequest() { return std::exchange(rebuildRequested_, false); }
+
 void App::invalidate() {
 	bottomValid_ = false;
 	redraw_ = true;
@@ -124,6 +151,7 @@ bool App::takeConfigChanged() { return std::exchange(configChanged_, false); }
 
 BrowserState App::state() const {
 	BrowserState s;
+	s.theme = theme_;
 	s.library = &library_;
 	s.userData = &userData_;
 	s.icons = &icons_;
@@ -166,6 +194,82 @@ void App::select(size_t cursor) {
 	redraw_ = true;
 }
 
+std::vector<MenuItem> App::menuItems() const {
+	std::vector<MenuItem> items(kMenuRows);
+	items[kSortRow] = {"Sort by", sortKeyLabel(config_.sort)};
+	items[kViewRow] = {"View", config_.view == ViewMode::Grid ? "Grid" : "List"};
+	items[kThemeRow] = {"Theme", theme_->name};
+	items[kRebuildRow] = {"Rebuild library", ""};
+	items[kCloseRow] = {"Close", ""};
+	return items;
+}
+
+// Options menu: up/down pick a row, left/right change its value, A changes values or runs the action,
+// B and START close it.
+void App::handleMenu(Action action, int touchX, int touchY) {
+	switch (action) {
+		case Action::Up: menuRow_ = std::max(0, menuRow_ - 1); break;
+		case Action::Down: menuRow_ = std::min(int(kMenuRows) - 1, menuRow_ + 1); break;
+		case Action::Left: activateMenuRow(menuRow_, -1); break;
+		case Action::Right:
+		case Action::Launch: activateMenuRow(menuRow_, 1); break;
+		case Action::Back:
+		case Action::Menu: setMenuOpen(false); break;
+		case Action::Tap: {
+			const int row = layout::menuRowAt(touchX, touchY, kMenuRows);
+			if (row < 0) return;
+			menuRow_ = row;
+			activateMenuRow(row, 1);
+			break;
+		}
+		default: return;
+	}
+	redraw_ = true;
+}
+
+void App::activateMenuRow(int row, int direction) {
+	const GameEntry* current = selected();
+	const std::string currentPath = current ? current->path : config_.selectedPath;
+	switch (row) {
+		case kSortRow: {
+			constexpr int kSortKeys = 3;
+			config_.sort = SortKey((int(config_.sort) + kSortKeys + direction) % kSortKeys);
+			configChanged_ = true;
+			rebuildView(currentPath);
+			break;
+		}
+		case kViewRow:
+			config_.view = config_.view == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
+			configChanged_ = true;
+			break;
+		case kThemeRow: {
+			if (!themes_ || themes_->empty()) break;
+			const int count = int(themes_->size());
+			int index = 0;
+			while (index < count && &(*themes_)[size_t(index)] != theme_) ++index;
+			index = ((index % count) + count + direction) % count;
+			setTheme((*themes_)[size_t(index)]);
+			config_.theme = theme_->name;
+			configChanged_ = true;
+			break;
+		}
+		case kRebuildRow:
+			if (direction < 0) break;
+			rebuildRequested_ = true;
+			setMenuOpen(false);
+			break;
+		case kCloseRow:
+			if (direction > 0) setMenuOpen(false);
+			break;
+	}
+}
+
+void App::setMenuOpen(bool open) {
+	menuOpen_ = open;
+	bottomValid_ = false;
+	redraw_ = true;
+}
+
 // While searching: the D-pad moves on the keyboard, A or a touch presses a key, B deletes (or leaves
 // when there is nothing to delete) and START finishes, like the OK key.
 void App::handleSearch(Action action, int touchX, int touchY) {
@@ -182,7 +286,7 @@ void App::handleSearch(Action action, int touchX, int touchY) {
 				pressKey(keyIndexFor('\b'));
 			}
 			break;
-		case Action::CycleSort:
+		case Action::Menu:
 		case Action::Search: setSearching(false); break;
 		case Action::Tap: {
 			const int key = keyAt(touchX, touchY);

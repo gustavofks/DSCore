@@ -13,7 +13,7 @@
 namespace dscore {
 
 enum class Action : uint8_t {
-	Up, Down, Left, Right, Launch, Back, Favorite, PrevTab, NextTab, ToggleView, CycleSort, Search, Tap
+	Up, Down, Left, Right, Launch, Back, Favorite, PrevTab, NextTab, ToggleView, Menu, Search, Tap
 };
 
 // Library browser state and input handling, independent of the hardware: the caller feeds actions,
@@ -31,6 +31,20 @@ public:
 
 	// Call after something else drew on the screens: the next frame redraws everything.
 	void invalidate();
+
+	void setTheme(const Theme& theme);
+	const Theme& theme() const { return *theme_; }
+
+	// Themes the options menu cycles through; selects the one named in the config.
+	void setThemes(const std::vector<Theme>& themes);
+
+	// The library was replaced (rebuilt): recompute the view and forget cached icons and cover.
+	void libraryChanged();
+
+	bool menuOpen() const { return menuOpen_; }
+
+	// True once after the user picked "Rebuild library" in the options menu.
+	bool takeRebuildRequest();
 
 	const GameEntry* selected() const;
 	bool searching() const { return searching_; }
@@ -54,12 +68,22 @@ private:
 	const LibraryData& library_;
 	UserData& userData_;
 	Config& config_;
+	const Theme* theme_ = &builtInThemes()[0];
 	std::vector<size_t> view_;
 	mutable IconCache icons_; // drawing is const but warms the cache
+	enum MenuRow { kSortRow, kViewRow, kThemeRow, kRebuildRow, kCloseRow, kMenuRows };
+	std::vector<MenuItem> menuItems() const;
+	void handleMenu(Action action, int touchX, int touchY);
+	void activateMenuRow(int row, int direction);
+	void setMenuOpen(bool open);
 	void handleSearch(Action action, int touchX, int touchY);
 	void pressKey(int index);
 	void setSearching(bool searching);
 
+	bool menuOpen_ = false;
+	int menuRow_ = 0;
+	bool rebuildRequested_ = false;
+	const std::vector<Theme>* themes_ = nullptr;
 	bool searching_ = false; // the keyboard is on screen
 	std::string query_;      // filter applied to every tab, typed with the keyboard
 	int keyIndex_ = 0;

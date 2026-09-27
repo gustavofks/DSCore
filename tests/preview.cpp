@@ -98,11 +98,19 @@ int main(int argc, char** argv) {
 		app.handle(Action::Tap, key.x + 2, key.y + 2);
 	}
 	shot(app, "7-search");
-	app.handle(Action::CycleSort); // START finishes the search
+	app.handle(Action::Menu); // START finishes the search
 	shot(app, "8-search-results");
+	app.handle(Action::Back);
+	app.setThemes(builtInThemes());
+	app.handle(Action::Menu);
+	app.handle(Action::Down);
+	app.handle(Action::Down);
+	app.handle(Action::Right); // next theme
+	shot(app, "9-menu-light");
+	app.handle(Action::Back);
 
-	drawMessageScreen(topCanvas, "DSCore", {"Loading library..."});
-	drawMessageScreen(bottomCanvas, "Indexing games", {"42 / 324", "Super Mario 64 DS"});
+	drawMessageScreen(topCanvas, builtInThemes()[0], "DSCore", {"Loading library..."});
+	drawMessageScreen(bottomCanvas, builtInThemes()[0], "Indexing games", {"42 / 324", "Super Mario 64 DS"});
 	writePng(outDir + "/6-indexing.png", top, bottom);
 	return 0;
 }

@@ -94,15 +94,58 @@ TEST_CASE("App toggles favorites and reports user data changes") {
 	CHECK(favorites.selected() == nullptr); // un-favorited game leaves the tab
 }
 
-TEST_CASE("App cycles sort and view") {
+TEST_CASE("App toggles the view with SELECT") {
 	const LibraryData lib = library(2, 0);
 	UserData data;
 	Config config;
 	App app(lib, data, config);
-	app.handle(Action::CycleSort);
-	CHECK(config.sort == SortKey::System);
 	app.handle(Action::ToggleView);
 	CHECK(config.view == ViewMode::List);
+}
+
+TEST_CASE("App options menu changes sort, view and theme and requests a rebuild") {
+	const LibraryData lib = library(2, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	app.setThemes(builtInThemes());
+	app.handle(Action::Menu);
+	CHECK(app.menuOpen());
+	CHECK(app.handle(Action::Launch).empty()); // row 0: sort
+	CHECK(config.sort == SortKey::System);
+	app.handle(Action::Left);
+	CHECK(config.sort == SortKey::Name);
+
+	app.handle(Action::Down); // view
+	app.handle(Action::Right);
+	CHECK(config.view == ViewMode::List);
+
+	app.handle(Action::Down); // theme
+	app.handle(Action::Right);
+	CHECK(config.theme == builtInThemes()[1].name);
+	CHECK(&app.theme() == &builtInThemes()[1]);
+	app.handle(Action::Left);
+	app.handle(Action::Left); // wraps around to the last theme
+	CHECK(config.theme == builtInThemes().back().name);
+
+	app.handle(Action::Down); // rebuild
+	app.handle(Action::Launch);
+	CHECK_FALSE(app.menuOpen());
+	CHECK(app.takeRebuildRequest());
+	CHECK_FALSE(app.takeRebuildRequest());
+}
+
+TEST_CASE("App restores the configured theme and closes the menu with B") {
+	const LibraryData lib = library(1, 0);
+	UserData data;
+	Config config;
+	config.theme = "OLED";
+	App app(lib, data, config);
+	app.setThemes(builtInThemes());
+	CHECK(app.theme().name == "OLED");
+	app.handle(Action::Menu);
+	app.handle(Action::Back);
+	CHECK_FALSE(app.menuOpen());
 }
 
 TEST_CASE("App touch selects a cell, then launches it, and switches tabs") {

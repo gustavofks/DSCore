@@ -11,11 +11,13 @@
 #include "core/UserData.h"
 #include "gfx/Canvas.h"
 #include "ui/IconCache.h"
+#include "ui/Theme.h"
 
 namespace dscore {
 
 // What the screens show; the views only read it.
 struct BrowserState {
+	const Theme* theme = nullptr;
 	const LibraryData* library = nullptr;
 	const UserData* userData = nullptr;
 	IconCache* icons = nullptr;                 // decoded icons, filled while drawing
@@ -30,8 +32,8 @@ struct BrowserState {
 
 // The game's banner icon, or a tile in the system color with the title's initials, drawn as a square of
 // size pixels: 16 (half size), 32 or any multiple of 32.
-void drawGameTile(Canvas& canvas, const LibraryData& library, IconCache& icons, const GameEntry& game, int x, int y,
-	int size);
+void drawGameTile(Canvas& canvas, const Theme& theme, const LibraryData& library, IconCache& icons, const GameEntry& game,
+	int x, int y, int size);
 
 // Top screen: details of the selected game.
 void drawDetailScreen(Canvas& canvas, const BrowserState& state);
@@ -47,9 +49,17 @@ void drawBrowserItem(Canvas& canvas, const BrowserState& state, size_t index);
 void drawSearchScreen(Canvas& canvas, const BrowserState& state);
 
 // Bottom screen while searching: the on-screen keyboard with the key under the cursor highlighted.
-void drawKeyboardScreen(Canvas& canvas, int selectedKey);
+void drawKeyboardScreen(Canvas& canvas, const Theme& theme, int selectedKey);
+
+struct MenuItem {
+	std::string label;
+	std::string value; // empty for actions
+};
+
+// Bottom screen while the options menu is open.
+void drawMenuScreen(Canvas& canvas, const Theme& theme, const std::vector<MenuItem>& items, int selected);
 
 // Full-screen message, e.g. while indexing or after an error.
-void drawMessageScreen(Canvas& canvas, const std::string& title, const std::vector<std::string>& lines);
+void drawMessageScreen(Canvas& canvas, const Theme& theme, const std::string& title, const std::vector<std::string>& lines);
 
 } // namespace dscore
