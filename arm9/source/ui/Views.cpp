@@ -18,7 +18,6 @@ using namespace layout;
 constexpr int kHeaderH = 16;
 constexpr int kHintBarY = kScreenH - kFooterH;
 constexpr uint32_t kFirstRtcTime = 1000000000; // below this, lastPlayed is an imported rank, not a date
-constexpr const char* kTabLabels[kTabCount] = {"All", "Fav", "DS", "GBA", "Recent"};
 constexpr uint16_t kTileText = rgb(31, 31, 31); // generated tiles use mid-tone colors in every theme
 
 // 9x9 star, bit 8 = leftmost pixel.
@@ -47,10 +46,6 @@ bool isFavorite(const BrowserState& state, const GameEntry& game) {
 	return stats && stats->favorite;
 }
 
-std::string systemName(System system) {
-	return system == System::Nds ? "Nintendo DS" : "Game Boy Advance";
-}
-
 std::string sizeText(uint32_t bytes) {
 	if (bytes >= (1u << 20)) return std::to_string(bytes >> 20) + " MB";
 	return std::to_string(bytes >> 10) + " KB";
@@ -59,8 +54,7 @@ std::string sizeText(uint32_t bytes) {
 uint16_t tileColor(const Theme& theme, const GameEntry& game) {
 	uint32_t hash = 2166136261u;
 	for (char c : game.title) hash = (hash ^ uint8_t(c)) * 16777619u;
-	const uint16_t* shades = game.system == System::Nds ? theme.ndsShades : theme.gbaShades;
-	return shades[hash % 4];
+	return tileShades(theme, game.system)[hash % 4];
 }
 
 std::string fileName(const std::string& path) {
@@ -74,12 +68,14 @@ std::string playedText(const GameStats* stats) {
 	return "Played " + std::to_string(stats->timesPlayed) + " times";
 }
 
-void drawTabs(Canvas& canvas, const Theme& theme, Tab active) {
-	for (int i = 0; i < kTabCount; ++i) {
-		const Rect r = tabRect(i);
-		const bool on = i == int(active);
+void drawTabs(Canvas& canvas, const Theme& theme, const std::vector<Tab>& tabs, Tab active) {
+	const std::vector<Rect> rects = tabBarRects(tabs, active);
+	for (size_t i = 0; i < tabs.size(); ++i) {
+		const Rect& r = rects[i];
+		if (r.x >= kScreenW || r.x + r.w <= 0) continue;
+		const bool on = tabs[i] == active;
 		canvas.fillRect({r.x + 1, r.y, r.w - 2, r.h}, on ? theme.accent : theme.surface);
-		drawCentered(canvas, smallFont(), r, kTabLabels[i], on ? theme.text : theme.muted);
+		drawCentered(canvas, smallFont(), r, tabLabel(tabs[i]), on ? theme.text : theme.muted);
 	}
 }
 
@@ -93,7 +89,7 @@ void drawFooter(Canvas& canvas, const BrowserState& state) {
 	const int textY = kHintBarY + (kFooterH - smallFont().height) / 2;
 	canvas.drawText(smallFont(), 4, textY, "Page " + std::to_string(page) + "/" + std::to_string(pages), theme.muted);
 
-	const std::string sort = state.tab == Tab::Recent ? "Newest first" : std::string("Sort: ") + sortKeyLabel(state.sort);
+	const std::string sort = state.tab.kind == Tab::Kind::Recent ? "Newest first" : std::string("Sort: ") + sortKeyLabel(state.sort);
 	canvas.drawText(smallFont(), kScreenW - 4 - textWidth(smallFont(), sort), textY, sort, theme.muted);
 }
 
@@ -127,6 +123,16 @@ void drawListRow(Canvas& canvas, const BrowserState& state, size_t index) {
 }
 
 } // namespace
+
+std::vector<Rect> tabBarRects(const std::vector<Tab>& tabs, Tab active) {
+	std::vector<int> widths;
+	int activeIndex = -1;
+	for (size_t i = 0; i < tabs.size(); ++i) {
+		widths.push_back(textWidth(smallFont(), tabLabel(tabs[i])));
+		if (tabs[i] == active) activeIndex = int(i);
+	}
+	return tabRects(widths, activeIndex);
+}
 
 void drawGameTile(Canvas& canvas, const Theme& theme, const LibraryData& library, IconCache& icons, const GameEntry& game,
 	int x, int y, int size) {
@@ -171,7 +177,7 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 		const Rect middle = {0, kHeaderH, kScreenW, kHintBarY - kHeaderH};
 		drawCentered(canvas, largeFont(), {middle.x, middle.y + middle.h / 2 - 20, middle.w, 20}, "No games here", theme.text);
 		drawCentered(canvas, smallFont(), {middle.x, middle.y + middle.h / 2 + 4, middle.w, 14},
-			state.tab == Tab::All ? "Add ROMs to sd:/roms/NDS or sd:/roms/GBA" : "Press L/R to change tab", theme.muted);
+			state.tab.kind == Tab::Kind::All ? "Add ROMs to sd:/roms/NDS or sd:/roms/GBA" : "Press L/R to change tab", theme.muted);
 	} else {
 		const Rect art = {8, 24, 112, 112};
 		canvas.fillRect(art, theme.surface);
@@ -193,7 +199,7 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 		const GameStats* stats = state.userData->find(game->path);
 		std::string sizeLine = sizeText(game->fileSize);
 		if (!game->gameCode.empty()) sizeLine += "  \xC2\xB7  " + game->gameCode; // U+00B7 middle dot
-		std::vector<std::string> info = {systemName(game->system), sizeLine, playedText(stats)};
+		std::vector<std::string> info = {systemInfo(game->system).name, sizeLine, playedText(stats)};
 		if (stats && stats->lastPlayed >= kFirstRtcTime) info.push_back("Last: " + formatDate(stats->lastPlayed));
 		for (const std::string& line : info) {
 			canvas.drawText(smallFont(), textX, y, ellipsize(smallFont(), line, textW), theme.muted);
@@ -212,7 +218,7 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 void drawBrowserScreen(Canvas& canvas, const BrowserState& state) {
 	const Theme& theme = *state.theme;
 	canvas.fill(theme.background);
-	drawTabs(canvas, theme, state.tab);
+	if (state.tabs) drawTabs(canvas, theme, *state.tabs, state.tab);
 	if (state.view->empty()) {
 		drawCentered(canvas, smallFont(), {0, kContentY, kScreenW, kContentH}, "Nothing in this tab", theme.muted);
 	} else {

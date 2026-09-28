@@ -11,7 +11,7 @@ enum class ViewMode : uint8_t { Grid, List };
 
 // Frontend settings and where the user was, restored after returning from a game.
 struct Config {
-	Tab tab = Tab::All;
+	Tab tab = Tab::all();
 	SortKey sort = SortKey::Name;
 	ViewMode view = ViewMode::Grid;
 	std::string selectedPath; // game under the cursor

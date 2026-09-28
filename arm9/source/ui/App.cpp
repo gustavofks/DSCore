@@ -11,6 +11,7 @@ namespace dscore {
 
 App::App(const LibraryData& library, UserData& userData, Config& config)
 	: library_(library), userData_(userData), config_(config) {
+	refreshTabs();
 	rebuildView(config_.selectedPath, Missing::First);
 }
 
@@ -53,10 +54,7 @@ std::string App::handle(Action action, int touchX, int touchY) {
 			break;
 		case Action::PrevTab:
 		case Action::NextTab:
-			config_.tab = action == Action::NextTab ? nextTab(config_.tab) : previousTab(config_.tab);
-			sound_ = Sound::Select;
-			configChanged_ = true;
-			rebuildView(currentPath, Missing::First);
+			switchTab(stepTab(tabs_, config_.tab, action == Action::NextTab ? 1 : -1), currentPath);
 			break;
 		case Action::ToggleView:
 			config_.view = config_.view == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
@@ -69,13 +67,9 @@ std::string App::handle(Action action, int touchX, int touchY) {
 			setMenuOpen(true);
 			break;
 		case Action::Tap: {
-			const int tab = layout::tabAt(touchX, touchY);
+			const int tab = layout::tabAt(tabBarRects(tabs_, config_.tab), touchX, touchY);
 			if (tab >= 0) {
-				if (Tab(tab) == config_.tab) break;
-				config_.tab = Tab(tab);
-				configChanged_ = true;
-				sound_ = Sound::Select;
-				rebuildView(currentPath, Missing::First);
+				if (tabs_[size_t(tab)] != config_.tab) switchTab(tabs_[size_t(tab)], currentPath);
 				break;
 			}
 			const int slot = config_.view == ViewMode::Grid ? layout::gridSlotAt(touchX, touchY)
@@ -138,6 +132,7 @@ void App::setThemes(const std::vector<Theme>& themes) {
 }
 
 void App::libraryChanged() {
+	refreshTabs();
 	icons_.clear();
 	cover_.reset();
 	coverPath_.clear();
@@ -172,6 +167,7 @@ BrowserState App::state() const {
 	s.cover = (cover_ && game && game->path == coverPath_) ? &*cover_ : nullptr;
 	s.view = &view_;
 	s.cursor = cursor_;
+	s.tabs = &tabs_;
 	s.tab = config_.tab;
 	s.sort = config_.sort;
 	s.mode = config_.view;
@@ -197,6 +193,21 @@ void App::rebuildView(const std::string& keepPath, Missing missing) {
 		configChanged_ = true;
 	}
 	redraw_ = true;
+}
+
+// Recomputes the tab bar; a saved tab whose console has no games left falls back to All.
+void App::refreshTabs() {
+	tabs_ = availableTabs(library_.games);
+	if (std::find(tabs_.begin(), tabs_.end(), config_.tab) != tabs_.end()) return;
+	config_.tab = Tab::all();
+	configChanged_ = true;
+}
+
+void App::switchTab(Tab tab, const std::string& currentPath) {
+	config_.tab = tab;
+	sound_ = Sound::Select;
+	configChanged_ = true;
+	rebuildView(currentPath, Missing::First);
 }
 
 void App::select(size_t cursor) {

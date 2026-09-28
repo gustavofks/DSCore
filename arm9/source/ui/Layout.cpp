@@ -1,11 +1,34 @@
 #include "ui/Layout.h"
 
+#include <algorithm>
+
 namespace dscore::layout {
 
-Rect tabRect(int index) {
-	const int x0 = index * kScreenW / kTabCount;
-	const int x1 = (index + 1) * kScreenW / kTabCount;
-	return {x0, 0, x1 - x0, kTabBarH};
+std::vector<Rect> tabRects(const std::vector<int>& labelWidths, int active) {
+	const int count = int(labelWidths.size());
+	std::vector<Rect> rects;
+	if (count == 0) return rects;
+	int natural = 0, widest = 0;
+	for (int w : labelWidths) {
+		natural += w + kTabPadding;
+		widest = std::max(widest, w + kTabPadding);
+	}
+	const bool even = widest * count <= kScreenW;
+	const int spare = std::max(0, kScreenW - natural);
+	int x = 0;
+	for (int i = 0; i < count; ++i) {
+		int w;
+		if (even) w = (i + 1) * kScreenW / count - i * kScreenW / count;
+		else w = labelWidths[size_t(i)] + kTabPadding + (i + 1) * spare / count - i * spare / count;
+		rects.push_back({x, 0, w, kTabBarH});
+		x += w;
+	}
+	if (x > kScreenW && active >= 0 && active < count) {
+		const Rect& on = rects[size_t(active)];
+		const int offset = std::clamp(on.x + on.w / 2 - kScreenW / 2, 0, x - kScreenW);
+		for (Rect& r : rects) r.x -= offset;
+	}
+	return rects;
 }
 
 Rect gridCellRect(int slot) {
@@ -30,9 +53,10 @@ int menuRowAt(int x, int y, int rows) {
 	return -1;
 }
 
-int tabAt(int x, int y) {
-	for (int i = 0; i < kTabCount; ++i) {
-		if (tabRect(i).contains(x, y)) return i;
+int tabAt(const std::vector<Rect>& tabs, int x, int y) {
+	if (x < 0 || x >= kScreenW) return -1;
+	for (size_t i = 0; i < tabs.size(); ++i) {
+		if (tabs[i].contains(x, y)) return int(i);
 	}
 	return -1;
 }

@@ -1,12 +1,15 @@
 #include "core/Config.h"
 
+#include <iterator>
+
 #include "core/IniText.h"
 
 namespace dscore {
 
 namespace {
 
-constexpr uint32_t kTabCount = 5;
+// Before per-console tabs, TAB held the index of a fixed tab.
+constexpr Tab kLegacyTabs[] = {Tab::all(), Tab::favorites(), Tab::console(System::Nds), Tab::console(System::Gba), Tab::recent()};
 constexpr uint32_t kSortKeyCount = 3;
 constexpr uint32_t kViewModeCount = 2;
 
@@ -14,7 +17,7 @@ constexpr uint32_t kViewModeCount = 2;
 
 std::string Config::serialize() const {
 	std::string out = "[DSCORE]\n";
-	out += "TAB = " + std::to_string(int(tab)) + "\n";
+	out += "TAB = " + tabId(tab) + "\n";
 	out += "SORT = " + std::to_string(int(sort)) + "\n";
 	out += "VIEW = " + std::to_string(int(view)) + "\n";
 	out += "SELECTED = " + selectedPath + "\n";
@@ -29,8 +32,10 @@ Config Config::parse(std::string_view ini) {
 		if (section != "DSCORE") return;
 		uint32_t number = 0;
 		const bool isNumber = parseIniUint(value, number);
-		if (key == "TAB" && isNumber && number < kTabCount) config.tab = Tab(number);
-		else if (key == "SORT" && isNumber && number < kSortKeyCount) config.sort = SortKey(number);
+		if (key == "TAB") {
+			if (isNumber && number < std::size(kLegacyTabs)) config.tab = kLegacyTabs[number];
+			else if (!isNumber) tabFromId(value, config.tab);
+		} else if (key == "SORT" && isNumber && number < kSortKeyCount) config.sort = SortKey(number);
 		else if (key == "VIEW" && isNumber && number < kViewModeCount) config.view = ViewMode(number);
 		else if (key == "SELECTED") config.selectedPath = std::string(value);
 		else if (key == "THEME") config.theme = std::string(value);

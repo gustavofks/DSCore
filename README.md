@@ -13,7 +13,7 @@ removed.
 - Library of DS (`.nds`) and GBA (`.gba`) games from `sd:/roms/NDS` and `sd:/roms/GBA`, subfolders
   included, with banner icons and titles for DS games and generated tiles for GBA games.
 - Box art on the details screen, downloaded on a PC with `tools/fetch_covers.py`.
-- Grid or list view, tabs (All, Favorites, DS, GBA, Recent) and sorting by name, system or play count.
+- Grid or list view, tabs (All, Favorites, one per console with at least one game, Recent) and sorting by name, system or play count.
 - Search by name with an on-screen keyboard.
 - Favorites and play history, seeded from TWiLight Menu++'s history on the first run.
 - Themes: four built in, plus your own color themes as INI files.

@@ -130,7 +130,7 @@ bool decodeLibrary(const uint8_t* data, size_t len, LibraryData& out) {
 		char code[4];
 		r.bytes(code, sizeof(code));
 		game.gameCode.assign(code, strnlen(code, sizeof(code)));
-		if (game.system != System::Nds && game.system != System::Gba) return false;
+		if (int(game.system) >= kSystemCount) return false;
 		if (game.iconIndex < -1 || game.iconIndex >= int32_t(iconCount)) return false;
 		library.games.push_back(std::move(game));
 	}

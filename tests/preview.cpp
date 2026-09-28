@@ -109,6 +109,22 @@ int main(int argc, char** argv) {
 	shot(app, "9-menu-light");
 	app.handle(Action::Back);
 
+	// Every console present: the tab bar no longer fits and scrolls with the active tab.
+	LibraryData many;
+	for (int s = 0; s < kSystemCount; ++s) {
+		for (int i = 0; i < 4; ++i) {
+			const std::string title = std::string(systemInfo(System(s)).name) + " " + std::to_string(i + 1);
+			many.games.push_back({"sd:/roms/" + std::string(systemInfo(System(s)).id) + "/" + title, title, System(s), "", 262144, -1});
+		}
+	}
+	UserData noHistory;
+	Config manyConfig;
+	App manyApp(many, noHistory, manyConfig);
+	for (int i = 0; i < 6; ++i) manyApp.handle(Action::NextTab);
+	shot(manyApp, "10-systems-snes");
+	for (int i = 0; i < 5; ++i) manyApp.handle(Action::NextTab);
+	shot(manyApp, "11-systems-end");
+
 	drawMessageScreen(topCanvas, builtInThemes()[0], "DSCore", {"Loading library..."});
 	drawMessageScreen(bottomCanvas, builtInThemes()[0], "Indexing games", {"42 / 324", "Super Mario 64 DS"});
 	writePng(outDir + "/6-indexing.png", top, bottom);
