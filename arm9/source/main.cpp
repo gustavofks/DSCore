@@ -6,6 +6,7 @@
 
 #include "common/systemdetails.h"
 #include "core/LibraryScan.h"
+#include "core/Version.h"
 #include "launch/TwilightLauncher.h"
 #include "my_gurumeditation.h"
 #include "platform/Power.h"
@@ -199,7 +200,7 @@ int main(int argc, char** argv) {
 	showMessage(screens, "DSCore", {"Loading..."}, "", {});
 	storage::ensureDataDir();
 
-	std::string log = "DSCore boot\n";
+	std::string log = std::string("DSCore ") + kVersion + " boot\n";
 	Config config = storage::loadConfig();
 	const std::vector<Theme> themes = storage::loadThemes();
 	messageTheme = &findTheme(themes, config.theme);

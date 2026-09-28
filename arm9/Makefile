@@ -16,7 +16,8 @@ DATA      := ../data
 # _NO_MAIN_ALL drops TWiLight's shared main() (universal/arm9/source/mainAll.cpp); ours replaces it.
 ARCH     := -mthumb -mthumb-interwork
 CFLAGS   := -g -Wall -O2 -march=armv5te -mtune=arm946e-s -fomit-frame-pointer -ffast-math -flto $(ARCH)
-CFLAGS   += $(INCLUDE) -DARM9 -DNO_PICO_LAUNCHER -DSTANDALONE -D_NO_MAIN_ALL -DCURRENT_SCREEN_MODE=0
+CFLAGS   += $(INCLUDE) -DARM9 -DNO_PICO_LAUNCHER -DSTANDALONE -D_NO_MAIN_ALL -DCURRENT_SCREEN_MODE=0 \
+            -DDSCORE_VERSION=\"$(DSCORE_VERSION)\"
 CXXFLAGS := $(CFLAGS) -fno-exceptions -std=gnu++17
 ASFLAGS  := -g $(ARCH) $(INCLUDE) -flto
 # Same as TWiLight's universal/arm9/ds_arm9_twlm.specs (EWRAM from 0x02004000), with paths for this tree.
