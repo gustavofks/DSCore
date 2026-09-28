@@ -19,6 +19,7 @@ std::string Config::serialize() const {
 	out += "VIEW = " + std::to_string(int(view)) + "\n";
 	out += "SELECTED = " + selectedPath + "\n";
 	out += "THEME = " + theme + "\n";
+	out += std::string("SOUND = ") + (sound ? "1" : "0") + "\n";
 	return out;
 }
 
@@ -33,6 +34,7 @@ Config Config::parse(std::string_view ini) {
 		else if (key == "VIEW" && isNumber && number < kViewModeCount) config.view = ViewMode(number);
 		else if (key == "SELECTED") config.selectedPath = std::string(value);
 		else if (key == "THEME") config.theme = std::string(value);
+		else if (key == "SOUND" && isNumber) config.sound = number != 0;
 	});
 	return config;
 }

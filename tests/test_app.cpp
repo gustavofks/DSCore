@@ -94,6 +94,54 @@ TEST_CASE("App toggles favorites and reports user data changes") {
 	CHECK(favorites.selected() == nullptr); // un-favorited game leaves the tab
 }
 
+TEST_CASE("App reports interface sounds") {
+	const LibraryData lib = library(20, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	app.handle(Action::Right);
+	CHECK(app.takeSound() == Sound::Move);
+	CHECK(app.takeSound() == Sound::None);
+	app.handle(Action::NextTab);
+	CHECK(app.takeSound() == Sound::Select);
+	app.handle(Action::PrevTab);
+	app.takeSound();
+	CHECK_FALSE(app.handle(Action::Launch).empty());
+	CHECK(app.takeSound() == Sound::Launch);
+	app.handle(Action::Menu);
+	CHECK(app.takeSound() == Sound::Select);
+	app.handle(Action::Back);
+	CHECK(app.takeSound() == Sound::Back);
+}
+
+TEST_CASE("App asks for a bottom transition when the page changes, not when the cursor moves") {
+	const LibraryData lib = library(40, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	std::vector<uint16_t> pixels(layout::kScreenW * layout::kScreenH);
+	Canvas canvas(pixels.data(), layout::kScreenW, layout::kScreenH);
+	app.drawBottom(canvas);
+	CHECK_FALSE(app.takeBottomTransition()); // first draw: nothing to transition from
+	app.handle(Action::Right);
+	app.drawBottom(canvas);
+	CHECK_FALSE(app.takeBottomTransition()); // same page
+	for (int i = 0; i < 3; ++i) app.handle(Action::Down);
+	app.drawBottom(canvas);
+	CHECK(app.takeBottomTransition()); // next page
+}
+
+TEST_CASE("App options menu toggles sounds") {
+	const LibraryData lib = library(1, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	app.handle(Action::Menu);
+	for (int i = 0; i < 3; ++i) app.handle(Action::Down);
+	app.handle(Action::Launch);
+	CHECK_FALSE(config.sound);
+}
+
 TEST_CASE("App toggles the view with SELECT") {
 	const LibraryData lib = library(2, 0);
 	UserData data;
@@ -128,6 +176,7 @@ TEST_CASE("App options menu changes sort, view and theme and requests a rebuild"
 	app.handle(Action::Left); // wraps around to the last theme
 	CHECK(config.theme == builtInThemes().back().name);
 
+	app.handle(Action::Down); // sounds
 	app.handle(Action::Down); // rebuild
 	app.handle(Action::Launch);
 	CHECK_FALSE(app.menuOpen());

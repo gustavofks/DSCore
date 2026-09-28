@@ -31,7 +31,7 @@ constexpr int kListRows = kContentH / kListRowH;
 
 // Options menu (bottom screen).
 constexpr int kMenuTop = 28;
-constexpr int kMenuRowH = 26;
+constexpr int kMenuRowH = 24;
 
 Rect tabRect(int index);
 Rect menuRowRect(int row);
