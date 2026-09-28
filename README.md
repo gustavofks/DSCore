@@ -63,8 +63,8 @@ With the SD card in the PC, run:
 python tools\fetch_covers.py E:\
 ```
 
-It reads each game's code, downloads its cover (DS from GameTDB, GBA and the rest from
-libretro-thumbnails), scales it for the DSi and saves it to `sd:/_nds/DSCore/covers`. Only the Python
+It identifies each game (by game code for DS and GBA, by CRC32 for the other consoles), downloads its
+cover (DS from GameTDB, the rest from libretro-thumbnails), scales it for the DSi and saves it to `sd:/_nds/DSCore/covers`. Only the Python
 standard library is needed. Covers already present are skipped; `--force` downloads them again and
 `--twilight` also saves the original images where TWiLight Menu++ looks for box art.
 
