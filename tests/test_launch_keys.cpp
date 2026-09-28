@@ -6,12 +6,30 @@
 
 using namespace dscore;
 
-TEST_CASE("romKindFor uses the extension, ignoring case") {
-	CHECK(romKindFor("sd:/roms/NDS/a/Game.nds") == RomKind::Nds);
-	CHECK(romKindFor("sd:/roms/NDS/Game.NDS") == RomKind::Nds);
-	CHECK(romKindFor("sd:/roms/GBA/Game.gba") == RomKind::Gba);
-	CHECK(romKindFor("sd:/roms/GBA/Alien Hominid # GBA.GBA") == RomKind::Gba);
-	CHECK(romKindFor("sd:/roms/GBA/Game.sav") == RomKind::Unsupported);
+namespace {
+
+bool isSystem(const char* path, System expected) {
+	System system;
+	return systemForPath(path, system) && system == expected;
+}
+
+} // namespace
+
+TEST_CASE("systemForPath uses the extension, ignoring case") {
+	CHECK(isSystem("sd:/roms/NDS/a/Game.nds", System::Nds));
+	CHECK(isSystem("sd:/roms/NDS/Game.NDS", System::Nds));
+	CHECK(isSystem("sd:/roms/GBA/Game.gba", System::Gba));
+	CHECK(isSystem("sd:/roms/GBA/Alien Hominid # GBA.GBA", System::Gba));
+	CHECK(isSystem("sd:/roms/GB/Tetris.gb", System::Gb));
+	CHECK(isSystem("sd:/roms/GB/Pokemon Yellow.SGB", System::Gb));
+	CHECK(isSystem("sd:/roms/GBC/Zelda.gbc", System::Gbc));
+	CHECK(isSystem("sd:/roms/NES/Metroid.nes", System::Nes));
+	CHECK(isSystem("sd:/roms/NES/Zelda.fds", System::Nes));
+	CHECK(isSystem("sd:/roms/SMS/Sonic.sms", System::Sms));
+	CHECK(isSystem("sd:/roms/GG/Sonic.gg", System::GameGear));
+	System system;
+	CHECK_FALSE(systemForPath("sd:/roms/GBA/Game.sav", system));
+	CHECK_FALSE(systemForPath("sd:/roms/SNES/Mario.sfc", system)); // not launchable yet
 }
 
 namespace {
@@ -62,6 +80,29 @@ TEST_CASE("bootstrapKeys point nds-bootstrap-hb at GBARunner2 with the ROM as ar
 
 TEST_CASE("bootstrapKeys is empty for DS games, which TWiLight configures itself") {
 	CHECK(bootstrapKeys("sd:/roms/NDS/Game.nds").empty());
+}
+
+TEST_CASE("relaunchKeys boots the console's emulator with the ROM as argument") {
+	const auto gb = relaunchKeys("sd:/roms/GB/Tetris.gb", false);
+	CHECK(gb.size() == 6);
+	CHECK(valueOf(gb, "ROM_PATH") == "sd:/roms/GB/Tetris.gb");
+	CHECK(valueOf(gb, "LAUNCH_TYPE") == "5");
+	CHECK(valueOf(gb, "HOMEBREW_ARG") == "sd:/roms/GB/Tetris.gb");
+	CHECK(valueOf(gb, "SLOT1_LAUNCHED") == "0");
+	CHECK(valueOf(gb, "PREVIOUS_USED_DEVICE") == "0");
+	CHECK(valueOf(relaunchKeys("sd:/roms/GBC/Zelda.gbc", false), "LAUNCH_TYPE") == "5");
+	CHECK(valueOf(relaunchKeys("sd:/roms/NES/Metroid.nes", false), "LAUNCH_TYPE") == "4");
+	CHECK(valueOf(relaunchKeys("sd:/roms/SMS/Sonic.sms", false), "LAUNCH_TYPE") == "6");
+	CHECK(valueOf(relaunchKeys("sd:/roms/GG/Sonic.gg", false), "LAUNCH_TYPE") == "6");
+	CHECK(bootstrapKeys("sd:/roms/GB/Tetris.gb").empty());
+}
+
+TEST_CASE("twilightEmulator names the emulator main.srldr boots") {
+	CHECK(std::string(twilightEmulator(System::Gbc)) == "sd:/_nds/TWiLightMenu/emulators/gameyob.nds");
+	CHECK(std::string(twilightEmulator(System::Nes)) == "sd:/_nds/TWiLightMenu/emulators/nestwl.nds");
+	CHECK(std::string(twilightEmulator(System::GameGear)) == "sd:/_nds/TWiLightMenu/emulators/S8DS.nds");
+	CHECK(twilightEmulator(System::Nds) == nullptr);
+	CHECK(twilightEmulator(System::Gba) == nullptr);
 }
 
 TEST_CASE("relaunchKeys is empty for unsupported files") {

@@ -19,6 +19,10 @@ struct SystemInfo {
 
 const SystemInfo& systemInfo(System system);
 
+// The system of a ROM file DSCore can launch, by extension (ignoring case). False for anything else,
+// including consoles whose launch is not supported yet.
+bool systemForPath(std::string_view path, System& out);
+
 // The system whose id is id, if any.
 bool systemFromId(std::string_view id, System& out);
 

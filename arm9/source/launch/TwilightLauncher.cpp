@@ -34,7 +34,8 @@ constexpr size_t kMarkerOverlap = 3; // keeps a constant split across two chunks
 // Classifies a .nds file the way TWiLight's ROM browser does. Non-DS files are never homebrew here.
 bool detectHomebrew(const std::string& romPath, bool& homebrew) {
 	homebrew = false;
-	if (romKindFor(romPath) != RomKind::Nds) return true;
+	System system;
+	if (!systemForPath(romPath, system) || system != System::Nds) return true;
 	FILE* f = fopen(romPath.c_str(), "rb");
 	if (!f) return false;
 	uint8_t header[kNdsHeaderSize];
@@ -91,10 +92,15 @@ bool patchIniFile(const char* path, const char* backup, const char* section, con
 } // namespace
 
 LaunchError launchViaTwilight(const std::string& romPath, int* loaderCode) {
-	if (romKindFor(romPath) == RomKind::Unsupported) return LaunchError::Unsupported;
+	System system;
+	if (!systemForPath(romPath, system)) return LaunchError::Unsupported;
 	bool homebrew = false;
 	if (!detectHomebrew(romPath, homebrew)) return LaunchError::RomRead;
 	const std::vector<IniKey> keys = relaunchKeys(romPath, homebrew);
+	if (keys.empty()) return LaunchError::Unsupported;
+	// Without its emulator, main.srldr would fall back to a flashcard path and fail after DSCore has quit.
+	const char* emulator = twilightEmulator(system);
+	if (emulator && !fileExists(emulator)) return LaunchError::EmulatorMissing;
 
 	bool rset = false;
 	if (!detectRsetMarker(rset)) return LaunchError::MainRead;
@@ -124,6 +130,7 @@ const char* describe(LaunchError error) {
 		case LaunchError::None: return "ok";
 		case LaunchError::Unsupported: return "unsupported file type";
 		case LaunchError::RomRead: return "could not read the ROM header";
+		case LaunchError::EmulatorMissing: return "emulator missing in _nds/TWiLightMenu/emulators";
 		case LaunchError::MainRead: return "could not read TWiLight main.srldr";
 		case LaunchError::SettingsRead: return "could not read TWiLight settings.ini";
 		case LaunchError::SettingsWrite: return "could not write TWiLight's settings";

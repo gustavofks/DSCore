@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <dirent.h>
 
-#include "core/LaunchKeys.h"
+#include "core/Systems.h"
 
 namespace dscore {
 
@@ -21,7 +21,7 @@ void scanFolder(const std::string& dir, int depth, std::vector<std::string>& out
 		const std::string path = prefix + entry->d_name;
 		if (entry->d_type == DT_DIR) {
 			scanFolder(path, depth + 1, out);
-		} else if (romKindFor(path) != RomKind::Unsupported) {
+		} else if (System system; systemForPath(path, system)) {
 			out.push_back(path);
 		}
 	}
@@ -75,13 +75,20 @@ std::vector<std::string> listRomFiles(const std::vector<std::string>& roots) {
 }
 
 bool readRomInfo(const std::string& path, BannerLanguage lang, GameEntry& game, std::optional<NdsIcon>& icon) {
+	System system;
+	if (!systemForPath(path, system)) return false;
 	FILE* f = fopen(path.c_str(), "rb");
 	if (!f) return false;
 	bool ok = false;
-	switch (romKindFor(path)) {
-		case RomKind::Nds: ok = readNds(f, path, lang, game, icon); break;
-		case RomKind::Gba: ok = readGba(f, path, game); break;
-		case RomKind::Unsupported: break;
+	switch (system) {
+		case System::Nds: ok = readNds(f, path, lang, game, icon); break;
+		case System::Gba: ok = readGba(f, path, game); break;
+		default:
+			// Emulated consoles: the No-Intro file name is a better title than the cartridge header.
+			game.system = system;
+			game.title = titleFromFileName(path);
+			ok = true;
+			break;
 	}
 	if (ok) game.fileSize = fileSize(f);
 	fclose(f);

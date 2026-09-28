@@ -24,7 +24,7 @@ namespace {
 
 using namespace dscore;
 
-const std::vector<std::string> kRomRoots = {"sd:/roms/NDS", "sd:/roms/GBA"};
+const std::vector<std::string> kRomRoots = {"sd:/roms"}; // every subfolder; files are matched by extension
 constexpr int kConfigSaveDelayFrames = 120; // batch cursor moves into one SD write
 constexpr size_t kProgressEvery = 8;        // redraw the indexing screen every few games
 constexpr int kCoverDelayFrames = 8;        // load box art once the cursor rests, not while scrolling

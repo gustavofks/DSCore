@@ -10,8 +10,11 @@ removed.
 
 ## Features
 
-- Library of DS (`.nds`) and GBA (`.gba`) games from `sd:/roms/NDS` and `sd:/roms/GBA`, subfolders
-  included, with banner icons and titles for DS games and generated tiles for GBA games.
+- Library of games found anywhere under `sd:/roms`, recognized by extension: DS (`.nds`), GBA
+  (`.gba`), Game Boy (`.gb`, `.sgb`), Game Boy Color (`.gbc`), NES (`.nes`, `.fds`), Master System
+  (`.sms`) and Game Gear (`.gg`). DS games show their banner icon and title; the others get a
+  generated tile and the file name as title. Games of the other consoles run in the emulators
+  TWiLight Menu++ ships in `sd:/_nds/TWiLightMenu/emulators`.
 - Box art on the details screen, downloaded on a PC with `tools/fetch_covers.py`.
 - Grid or list view, tabs (All, Favorites, one per console with at least one game, Recent) and sorting by name, system or play count.
 - Search by name with an on-screen keyboard.
@@ -45,7 +48,7 @@ Requirements: a DSi with Unlaunch and TWiLight Menu++ installed on the SD card, 
 2. Copy it over `sd:/_nds/TWiLightMenu/dsimenu.srldr`, keeping the original file as a backup.
    `tools\deploy.ps1 -Target E:\ -Mode srldr` does this, keeps the original as
    `dsimenu.srldr.dscore-orig` and copies the example themes.
-3. Put your games in `sd:/roms/NDS` and `sd:/roms/GBA`.
+3. Put your games under `sd:/roms`, e.g. `sd:/roms/NDS`, `sd:/roms/GBA`, `sd:/roms/GB`.
 
 A TWiLight Menu++ update replaces `dsimenu.srldr`; copy DSCore again afterwards.
 

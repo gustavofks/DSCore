@@ -177,7 +177,7 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 		const Rect middle = {0, kHeaderH, kScreenW, kHintBarY - kHeaderH};
 		drawCentered(canvas, largeFont(), {middle.x, middle.y + middle.h / 2 - 20, middle.w, 20}, "No games here", theme.text);
 		drawCentered(canvas, smallFont(), {middle.x, middle.y + middle.h / 2 + 4, middle.w, 14},
-			state.tab.kind == Tab::Kind::All ? "Add ROMs to sd:/roms/NDS or sd:/roms/GBA" : "Press L/R to change tab", theme.muted);
+			state.tab.kind == Tab::Kind::All ? "Add ROMs under sd:/roms" : "Press L/R to change tab", theme.muted);
 	} else {
 		const Rect art = {8, 24, 112, 112};
 		canvas.fillRect(art, theme.surface);
