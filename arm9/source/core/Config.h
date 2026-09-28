@@ -16,6 +16,7 @@ struct Config {
 	ViewMode view = ViewMode::Grid;
 	std::string selectedPath; // game under the cursor
 	std::string theme;        // theme name; empty = the default theme
+	bool sound = true;        // interface sound effects
 
 	std::string serialize() const;
 	static Config parse(std::string_view ini); // unknown or invalid values keep their defaults

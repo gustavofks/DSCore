@@ -12,6 +12,9 @@
 
 namespace dscore {
 
+// Interface sound the caller should play after an action.
+enum class Sound : uint8_t { None, Move, Select, Back, Launch };
+
 enum class Action : uint8_t {
 	Up, Down, Left, Right, Launch, Back, Favorite, PrevTab, NextTab, ToggleView, Menu, Search, Tap
 };
@@ -54,6 +57,8 @@ public:
 	void setCover(const std::string& path, std::optional<Cover> cover);
 
 	// Each flag is cleared when read.
+	Sound takeSound();
+	bool takeBottomTransition(); // the bottom screen switched to another page or tab
 	bool takeRedraw();
 	bool takeUserDataChanged();
 	bool takeConfigChanged();
@@ -71,7 +76,7 @@ private:
 	const Theme* theme_ = &builtInThemes()[0];
 	std::vector<size_t> view_;
 	mutable IconCache icons_; // drawing is const but warms the cache
-	enum MenuRow { kSortRow, kViewRow, kThemeRow, kRebuildRow, kCloseRow, kMenuRows };
+	enum MenuRow { kSortRow, kViewRow, kThemeRow, kSoundRow, kRebuildRow, kCloseRow, kMenuRows };
 	std::vector<MenuItem> menuItems() const;
 	void handleMenu(Action action, int touchX, int touchY);
 	void activateMenuRow(int row, int direction);
@@ -95,6 +100,8 @@ private:
 	mutable size_t drawnCursor_ = 0;
 	size_t cursor_ = 0;
 	bool redraw_ = true;
+	Sound sound_ = Sound::None;
+	mutable bool bottomTransition_ = false;
 	bool userDataChanged_ = false;
 	bool configChanged_ = false;
 };

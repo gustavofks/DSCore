@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "core/RomMedia.h"
+#include "core/Version.h"
 #include "core/Text.h"
 #include "ui/Keyboard.h"
 #include "ui/Layout.h"
@@ -274,6 +275,8 @@ void drawKeyboardScreen(Canvas& canvas, const Theme& theme, int selectedKey) {
 void drawMenuScreen(Canvas& canvas, const Theme& theme, const std::vector<MenuItem>& items, int selected) {
 	canvas.fill(theme.background);
 	drawCentered(canvas, largeFont(), {0, 4, kScreenW, largeFont().height}, "Options", theme.text);
+	const std::string version = std::string("v") + kVersion;
+	canvas.drawText(smallFont(), kScreenW - 6 - textWidth(smallFont(), version), 8, version, theme.muted);
 	for (size_t i = 0; i < items.size(); ++i) {
 		const Rect r = menuRowRect(int(i));
 		const bool on = int(i) == selected;

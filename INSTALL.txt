@@ -1,0 +1,17 @@
+DSCore - installation
+=====================
+
+Requirements: a Nintendo DSi with Unlaunch and TWiLight Menu++ on the SD card, using the DSi, 3DS,
+Saturn or HBL theme. Back up your SD card first.
+
+With the SD card in a Windows PC (E:\ below):
+
+  Install:        powershell -ExecutionPolicy Bypass -File tools\deploy.ps1 -Target E:\ -Mode srldr
+  Get box art:    python tools\fetch_covers.py E:\
+  Undo:           powershell -ExecutionPolicy Bypass -File tools\restore.ps1 -Target E:\
+
+Without the scripts: rename sd:/_nds/TWiLightMenu/dsimenu.srldr to dsimenu.srldr.dscore-orig, copy
+dscore.nds there as dsimenu.srldr, and copy themes\*.ini to sd:/_nds/DSCore/themes/.
+
+Games go in sd:/roms/NDS and sd:/roms/GBA. Updating TWiLight Menu++ replaces dsimenu.srldr: install
+DSCore again afterwards. See README.md for controls, themes and details.

@@ -32,10 +32,13 @@ std::string App::handle(Action action, int touchX, int touchY) {
 		case Action::Down: select(moveCursor(cursor_, view_.size(), config_.view, Move::Down)); break;
 		case Action::Left: select(moveCursor(cursor_, view_.size(), config_.view, Move::Left)); break;
 		case Action::Right: select(moveCursor(cursor_, view_.size(), config_.view, Move::Right)); break;
-		case Action::Launch: return currentPath;
+		case Action::Launch:
+			if (!currentPath.empty() && current) sound_ = Sound::Launch;
+			return current ? currentPath : std::string();
 		case Action::Back:
 			if (query_.empty()) break;
 			query_.clear(); // B leaves the search results
+			sound_ = Sound::Back;
 			rebuildView(currentPath, Missing::First);
 			break;
 		case Action::Search:
@@ -43,6 +46,7 @@ std::string App::handle(Action action, int touchX, int touchY) {
 			break;
 		case Action::Favorite:
 			if (!current) break;
+			sound_ = Sound::Select;
 			userData_.toggleFavorite(currentPath);
 			userDataChanged_ = true;
 			rebuildView(currentPath);
@@ -50,12 +54,14 @@ std::string App::handle(Action action, int touchX, int touchY) {
 		case Action::PrevTab:
 		case Action::NextTab:
 			config_.tab = action == Action::NextTab ? nextTab(config_.tab) : previousTab(config_.tab);
+			sound_ = Sound::Select;
 			configChanged_ = true;
 			rebuildView(currentPath, Missing::First);
 			break;
 		case Action::ToggleView:
 			config_.view = config_.view == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
 			configChanged_ = true;
+			sound_ = Sound::Select;
 			bottomValid_ = false;
 			redraw_ = true;
 			break;
@@ -68,12 +74,16 @@ std::string App::handle(Action action, int touchX, int touchY) {
 				if (Tab(tab) == config_.tab) break;
 				config_.tab = Tab(tab);
 				configChanged_ = true;
+				sound_ = Sound::Select;
 				rebuildView(currentPath, Missing::First);
 				break;
 			}
 			const int slot = config_.view == ViewMode::Grid ? layout::gridSlotAt(touchX, touchY)
 			                                                : layout::listRowAt(touchX, touchY);
-			if (slot >= 0) return activate(pageStart(cursor_, config_.view) + size_t(slot));
+			if (slot < 0) break;
+			const std::string path = activate(pageStart(cursor_, config_.view) + size_t(slot));
+			if (!path.empty()) sound_ = Sound::Launch;
+			return path;
 			break;
 		}
 	}
@@ -103,6 +113,7 @@ void App::drawBottom(Canvas& canvas) const {
 			drawBrowserItem(canvas, s, cursor_);
 		}
 	} else {
+		if (bottomValid_) bottomTransition_ = true; // replacing a page the user was looking at
 		drawBrowserScreen(canvas, s);
 	}
 	bottomValid_ = true;
@@ -145,6 +156,8 @@ const GameEntry* App::selected() const {
 	return cursor_ < view_.size() ? &library_.games[view_[cursor_]] : nullptr;
 }
 
+Sound App::takeSound() { return std::exchange(sound_, Sound::None); }
+bool App::takeBottomTransition() { return std::exchange(bottomTransition_, false); }
 bool App::takeRedraw() { return std::exchange(redraw_, false); }
 bool App::takeUserDataChanged() { return std::exchange(userDataChanged_, false); }
 bool App::takeConfigChanged() { return std::exchange(configChanged_, false); }
@@ -189,6 +202,7 @@ void App::rebuildView(const std::string& keepPath, Missing missing) {
 void App::select(size_t cursor) {
 	if (cursor == cursor_ || cursor >= view_.size()) return;
 	cursor_ = cursor;
+	sound_ = Sound::Move;
 	config_.selectedPath = library_.games[view_[cursor_]].path;
 	configChanged_ = true;
 	redraw_ = true;
@@ -199,6 +213,7 @@ std::vector<MenuItem> App::menuItems() const {
 	items[kSortRow] = {"Sort by", sortKeyLabel(config_.sort)};
 	items[kViewRow] = {"View", config_.view == ViewMode::Grid ? "Grid" : "List"};
 	items[kThemeRow] = {"Theme", theme_->name};
+	items[kSoundRow] = {"Sounds", config_.sound ? "On" : "Off"};
 	items[kRebuildRow] = {"Rebuild library", ""};
 	items[kCloseRow] = {"Close", ""};
 	return items;
@@ -208,8 +223,14 @@ std::vector<MenuItem> App::menuItems() const {
 // B and START close it.
 void App::handleMenu(Action action, int touchX, int touchY) {
 	switch (action) {
-		case Action::Up: menuRow_ = std::max(0, menuRow_ - 1); break;
-		case Action::Down: menuRow_ = std::min(int(kMenuRows) - 1, menuRow_ + 1); break;
+		case Action::Up:
+			menuRow_ = std::max(0, menuRow_ - 1);
+			sound_ = Sound::Move;
+			break;
+		case Action::Down:
+			menuRow_ = std::min(int(kMenuRows) - 1, menuRow_ + 1);
+			sound_ = Sound::Move;
+			break;
 		case Action::Left: activateMenuRow(menuRow_, -1); break;
 		case Action::Right:
 		case Action::Launch: activateMenuRow(menuRow_, 1); break;
@@ -228,6 +249,7 @@ void App::handleMenu(Action action, int touchX, int touchY) {
 }
 
 void App::activateMenuRow(int row, int direction) {
+	sound_ = Sound::Select;
 	const GameEntry* current = selected();
 	const std::string currentPath = current ? current->path : config_.selectedPath;
 	switch (row) {
@@ -253,6 +275,10 @@ void App::activateMenuRow(int row, int direction) {
 			configChanged_ = true;
 			break;
 		}
+		case kSoundRow:
+			config_.sound = !config_.sound;
+			configChanged_ = true;
+			break;
 		case kRebuildRow:
 			if (direction < 0) break;
 			rebuildRequested_ = true;
@@ -266,6 +292,7 @@ void App::activateMenuRow(int row, int direction) {
 
 void App::setMenuOpen(bool open) {
 	menuOpen_ = open;
+	sound_ = open ? Sound::Select : Sound::Back;
 	bottomValid_ = false;
 	redraw_ = true;
 }
@@ -274,10 +301,10 @@ void App::setMenuOpen(bool open) {
 // when there is nothing to delete) and START finishes, like the OK key.
 void App::handleSearch(Action action, int touchX, int touchY) {
 	switch (action) {
-		case Action::Up: keyIndex_ = moveKey(keyIndex_, Move::Up); break;
-		case Action::Down: keyIndex_ = moveKey(keyIndex_, Move::Down); break;
-		case Action::Left: keyIndex_ = moveKey(keyIndex_, Move::Left); break;
-		case Action::Right: keyIndex_ = moveKey(keyIndex_, Move::Right); break;
+		case Action::Up: keyIndex_ = moveKey(keyIndex_, Move::Up); sound_ = Sound::Move; break;
+		case Action::Down: keyIndex_ = moveKey(keyIndex_, Move::Down); sound_ = Sound::Move; break;
+		case Action::Left: keyIndex_ = moveKey(keyIndex_, Move::Left); sound_ = Sound::Move; break;
+		case Action::Right: keyIndex_ = moveKey(keyIndex_, Move::Right); sound_ = Sound::Move; break;
 		case Action::Launch: pressKey(keyIndex_); break;
 		case Action::Back:
 			if (query_.empty()) {
@@ -304,6 +331,7 @@ void App::handleSearch(Action action, int touchX, int touchY) {
 void App::pressKey(int index) {
 	const GameEntry* current = selected();
 	const std::string currentPath = current ? current->path : config_.selectedPath;
+	sound_ = Sound::Select;
 	switch (applyKey(keyboardKeys()[size_t(index)], query_)) {
 		case KeyResult::Edited: rebuildView(currentPath, Missing::First); break;
 		case KeyResult::Done: setSearching(false); break;
@@ -313,6 +341,7 @@ void App::pressKey(int index) {
 
 void App::setSearching(bool searching) {
 	searching_ = searching;
+	sound_ = searching ? Sound::Select : Sound::Back;
 	if (searching && keyIndex_ == 0) keyIndex_ = keyIndexFor('A');
 	bottomValid_ = false;
 	redraw_ = true;

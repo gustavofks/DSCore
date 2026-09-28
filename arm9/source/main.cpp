@@ -6,8 +6,10 @@
 
 #include "common/systemdetails.h"
 #include "core/LibraryScan.h"
+#include "core/Version.h"
 #include "launch/TwilightLauncher.h"
 #include "my_gurumeditation.h"
+#include "platform/Effects.h"
 #include "platform/Power.h"
 #include "platform/RomFiles.h"
 #include "platform/Screens.h"
@@ -26,6 +28,7 @@ const std::vector<std::string> kRomRoots = {"sd:/roms/NDS", "sd:/roms/GBA"};
 constexpr int kConfigSaveDelayFrames = 120; // batch cursor moves into one SD write
 constexpr size_t kProgressEvery = 8;        // redraw the indexing screen every few games
 constexpr int kCoverDelayFrames = 8;        // load box art once the cursor rests, not while scrolling
+constexpr int kFadeFrames = 8;
 
 // Theme of the message screens (loading, errors); follows the one chosen in the options menu.
 const Theme* messageTheme = &builtInThemes()[0];
@@ -166,16 +169,16 @@ struct DrawStats {
 	}
 };
 
-void launch(Screens& screens, App& app, UserData& userData, Config& config, const std::string& path) {
+void launch(Screens& screens, UserData& userData, Config& config, const std::string& path) {
 	userData.recordLaunch(path, uint32_t(time(nullptr)));
 	storage::saveUserData(userData);
 	config.selectedPath = path;
 	storage::saveConfig(config);
 
-	const GameEntry* game = app.selected();
-	showMessage(screens, "Starting", {game ? game->title : path}, "", {"Loading through TWiLight Menu++..."});
+	fadeOut(kFadeFrames);
 	int code = 0;
 	const LaunchError error = launchViaTwilight(path, &code);
+	setBrightness(3, 0);
 	showMessage(screens, "Could not start the game", {describe(error), "code " + std::to_string(code)}, "", {"Press B to go back"});
 	do {
 		swiWaitForVBlank();
@@ -192,14 +195,19 @@ int main(int argc, char** argv) {
 	sys().initFilesystem(argc > 0 ? argv[0] : "sd:/dscore.nds");
 	sys().initArm7RegStatuses();
 
-	// main.srldr fades both screens to white before booting its theme and leaves the fade-in to it.
-	setBrightness(3, 0);
+	// main.srldr fades both screens to white before booting its theme and leaves the fade-in to it:
+	// start from black and fade in once there is something to show.
+	setBrightness(3, -16);
 	Screens screens;
-	if (!sys().fatInitOk()) halt(screens, "SD card not found", {"DSCore needs the DSi SD card."});
+	if (!sys().fatInitOk()) {
+		setBrightness(3, 0);
+		halt(screens, "SD card not found", {"DSCore needs the DSi SD card."});
+	}
 	showMessage(screens, "DSCore", {"Loading..."}, "", {});
+	fadeIn(kFadeFrames);
 	storage::ensureDataDir();
 
-	std::string log = "DSCore boot\n";
+	std::string log = std::string("DSCore ") + kVersion + " boot\n";
 	Config config = storage::loadConfig();
 	const std::vector<Theme> themes = storage::loadThemes();
 	messageTheme = &findTheme(themes, config.theme);
@@ -222,15 +230,19 @@ int main(int argc, char** argv) {
 	int configSaveCountdown = -1;
 	DrawStats drawStats;
 	CoverLoader covers;
+	SoundEffects sounds;
+	BottomFade bottomFade;
 	while (true) {
 		if (powerButtonPressed()) {
 			if (configSaveCountdown > 0) storage::saveConfig(config);
 			returnToSystemMenu();
 		}
 		const std::string path = handleInput(app);
+		const Sound sound = app.takeSound();
+		if (config.sound) sounds.play(sound);
 		if (!path.empty()) {
 			storage::appendLog(drawStats.summary());
-			launch(screens, app, userData, config, path);
+			launch(screens, userData, config, path);
 			configSaveCountdown = -1;
 			app.invalidate();
 			continue;
@@ -253,8 +265,10 @@ int main(int argc, char** argv) {
 			app.drawBottom(screens.bottom());
 			drawStats.add(elapsedMs() - start);
 			screens.present();
+			if (app.takeBottomTransition()) bottomFade.start();
 		} else {
 			swiWaitForVBlank();
 		}
+		bottomFade.update();
 	}
 }
