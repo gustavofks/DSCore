@@ -265,10 +265,13 @@ def main():
         time.sleep(0.1)  # be gentle with the servers
 
     print(f"\n{found} covers saved, {skipped} already present, {len(missing)} not found.")
+    missing_list = os.path.join(covers_dir, "missing.txt")
     if missing:
-        with open(os.path.join(covers_dir, "missing.txt"), "w", encoding="utf-8") as f:
+        with open(missing_list, "w", encoding="utf-8") as f:
             f.write("\n".join(missing) + "\n")
-        print(f"Missing list: {os.path.join(covers_dir, 'missing.txt')}")
+        print(f"Missing list: {missing_list}")
+    elif os.path.exists(missing_list):
+        os.remove(missing_list)
 
 
 if __name__ == "__main__":
