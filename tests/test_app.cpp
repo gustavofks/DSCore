@@ -94,15 +94,58 @@ TEST_CASE("App toggles favorites and reports user data changes") {
 	CHECK(favorites.selected() == nullptr); // un-favorited game leaves the tab
 }
 
-TEST_CASE("App cycles sort and view") {
+TEST_CASE("App toggles the view with SELECT") {
 	const LibraryData lib = library(2, 0);
 	UserData data;
 	Config config;
 	App app(lib, data, config);
-	app.handle(Action::CycleSort);
-	CHECK(config.sort == SortKey::System);
 	app.handle(Action::ToggleView);
 	CHECK(config.view == ViewMode::List);
+}
+
+TEST_CASE("App options menu changes sort, view and theme and requests a rebuild") {
+	const LibraryData lib = library(2, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	app.setThemes(builtInThemes());
+	app.handle(Action::Menu);
+	CHECK(app.menuOpen());
+	CHECK(app.handle(Action::Launch).empty()); // row 0: sort
+	CHECK(config.sort == SortKey::System);
+	app.handle(Action::Left);
+	CHECK(config.sort == SortKey::Name);
+
+	app.handle(Action::Down); // view
+	app.handle(Action::Right);
+	CHECK(config.view == ViewMode::List);
+
+	app.handle(Action::Down); // theme
+	app.handle(Action::Right);
+	CHECK(config.theme == builtInThemes()[1].name);
+	CHECK(&app.theme() == &builtInThemes()[1]);
+	app.handle(Action::Left);
+	app.handle(Action::Left); // wraps around to the last theme
+	CHECK(config.theme == builtInThemes().back().name);
+
+	app.handle(Action::Down); // rebuild
+	app.handle(Action::Launch);
+	CHECK_FALSE(app.menuOpen());
+	CHECK(app.takeRebuildRequest());
+	CHECK_FALSE(app.takeRebuildRequest());
+}
+
+TEST_CASE("App restores the configured theme and closes the menu with B") {
+	const LibraryData lib = library(1, 0);
+	UserData data;
+	Config config;
+	config.theme = "OLED";
+	App app(lib, data, config);
+	app.setThemes(builtInThemes());
+	CHECK(app.theme().name == "OLED");
+	app.handle(Action::Menu);
+	app.handle(Action::Back);
+	CHECK_FALSE(app.menuOpen());
 }
 
 TEST_CASE("App touch selects a cell, then launches it, and switches tabs") {
@@ -170,4 +213,88 @@ TEST_CASE("App redraws everything after invalidate") {
 	CHECK(app.takeRedraw());
 	app.drawBottom(canvas);
 	CHECK(pixels[size_t(layout::kScreenW) * layout::kScreenH / 2] != 0x801F);
+}
+
+TEST_CASE("App shows a cover only while its game is selected") {
+	const LibraryData lib = library(2, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	std::vector<uint16_t> withCover(layout::kScreenW * layout::kScreenH), without(withCover.size());
+	Canvas withCanvas(withCover.data(), layout::kScreenW, layout::kScreenH);
+	Canvas withoutCanvas(without.data(), layout::kScreenW, layout::kScreenH);
+
+	app.drawTop(withoutCanvas);
+	app.takeRedraw();
+	Cover cover;
+	cover.width = cover.height = 4;
+	cover.pixels.assign(16, 0x801F);
+	app.setCover("sd:/roms/NDS/100.nds", cover);
+	CHECK(app.takeRedraw());
+	app.drawTop(withCanvas);
+	CHECK(withCover != without);
+
+	app.handle(Action::Right); // another game is selected now
+	app.takeRedraw();
+	app.setCover("sd:/roms/NDS/100.nds", std::nullopt); // not the selected game: no redraw needed
+	CHECK_FALSE(app.takeRedraw());
+}
+
+#include "ui/Keyboard.h"
+
+namespace {
+
+void tapKey(App& app, char value) {
+	const Rect& r = keyboardKeys()[size_t(keyIndexFor(value))].rect;
+	app.handle(Action::Tap, r.x + 2, r.y + 2);
+}
+
+} // namespace
+
+TEST_CASE("App search filters as you type and keeps the filter after OK") {
+	LibraryData lib;
+	lib.games.push_back({"sd:/roms/NDS/a.nds", "Mario Kart DS", System::Nds, "", 0, -1});
+	lib.games.push_back({"sd:/roms/NDS/b.nds", "Zelda", System::Nds, "", 0, -1});
+	lib.games.push_back({"sd:/roms/GBA/c.gba", "Metroid Fusion", System::Gba, "", 0, -1});
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+
+	app.handle(Action::Search);
+	CHECK(app.searching());
+	tapKey(app, 'Z');
+	CHECK(app.query() == "Z");
+	CHECK(app.selected()->title == "Zelda");
+	CHECK(app.handle(Action::Launch).empty()); // A types the key under the cursor, it never launches
+	CHECK(app.query() == "ZZ");
+	app.handle(Action::Back);                  // B deletes
+	CHECK(app.query() == "Z");
+
+	tapKey(app, '\n'); // OK
+	CHECK_FALSE(app.searching());
+	CHECK(app.query() == "Z");
+	CHECK(app.handle(Action::Launch) == "sd:/roms/NDS/b.nds");
+
+	app.handle(Action::Back); // clears the filter
+	CHECK(app.query().empty());
+	CHECK(app.selected() != nullptr);
+}
+
+TEST_CASE("App search: B deletes, then leaves; the D-pad moves between keys") {
+	const LibraryData lib = library(3, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	app.handle(Action::Search);
+	app.handle(Action::Launch); // types the key under the cursor ('A' at start)
+	CHECK(app.query() == "A");
+	app.handle(Action::Right);
+	app.handle(Action::Launch);
+	CHECK(app.query() == "AS");
+	app.handle(Action::Back);
+	CHECK(app.query() == "A");
+	app.handle(Action::Back);
+	app.handle(Action::Back); // nothing left to delete: leaves the keyboard
+	CHECK_FALSE(app.searching());
+	CHECK(app.query().empty());
 }

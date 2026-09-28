@@ -2,6 +2,10 @@
 
 namespace dscore {
 
+void IconCache::clear() {
+	for (Slot& slot : slots_) slot.index = -1;
+}
+
 const uint16_t* IconCache::get(const std::vector<NdsIcon>& icons, int index) {
 	Slot* victim = &slots_[0];
 	for (Slot& slot : slots_) {

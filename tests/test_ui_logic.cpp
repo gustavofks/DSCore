@@ -12,7 +12,9 @@ TEST_CASE("Config round-trips and ignores invalid values") {
 	config.sort = SortKey::MostPlayed;
 	config.view = ViewMode::List;
 	config.selectedPath = "sd:/roms/GBA/Metroid = Fusion.gba";
+	config.theme = "OLED";
 	const Config copy = Config::parse(config.serialize());
+	CHECK(copy.theme == "OLED");
 	CHECK(copy.tab == Tab::Gba);
 	CHECK(copy.sort == SortKey::MostPlayed);
 	CHECK(copy.view == ViewMode::List);

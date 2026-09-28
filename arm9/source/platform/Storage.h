@@ -1,8 +1,10 @@
 #pragma once
 
 #include "core/Config.h"
+#include "core/Cover.h"
 #include "core/LibraryCache.h"
 #include "core/UserData.h"
+#include "ui/Theme.h"
 
 namespace dscore::storage {
 
@@ -18,6 +20,12 @@ bool saveLibrary(const LibraryData& library);
 // Loads userdata.ini; on the first run (no file yet) seeds it from TWiLight Menu++'s play history.
 UserData loadUserData();
 bool saveUserData(const UserData& userData);
+
+// Box art for a ROM from covers/ (written by tools/fetch_covers.py); nullopt when missing or invalid.
+std::optional<Cover> loadCover(const std::string& romPath);
+
+// Built-in themes followed by the *.ini files in themes/ (see parseTheme), in file name order.
+std::vector<Theme> loadThemes();
 
 Config loadConfig();
 bool saveConfig(const Config& config);

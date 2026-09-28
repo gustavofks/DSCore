@@ -19,6 +19,17 @@ Rect listRowRect(int row) {
 	return {0, kContentY + row * kListRowH, kScreenW, kListRowH};
 }
 
+Rect menuRowRect(int row) {
+	return {12, kMenuTop + row * kMenuRowH, kScreenW - 24, kMenuRowH - 4};
+}
+
+int menuRowAt(int x, int y, int rows) {
+	for (int row = 0; row < rows; ++row) {
+		if (menuRowRect(row).contains(x, y)) return row;
+	}
+	return -1;
+}
+
 int tabAt(int x, int y) {
 	for (int i = 0; i < kTabCount; ++i) {
 		if (tabRect(i).contains(x, y)) return i;

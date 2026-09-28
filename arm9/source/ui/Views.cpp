@@ -4,9 +4,9 @@
 
 #include "core/RomMedia.h"
 #include "core/Text.h"
+#include "ui/Keyboard.h"
 #include "ui/Layout.h"
 #include "ui/Navigation.h"
-#include "ui/Palette.h"
 
 namespace dscore {
 
@@ -18,6 +18,7 @@ constexpr int kHeaderH = 16;
 constexpr int kHintBarY = kScreenH - kFooterH;
 constexpr uint32_t kFirstRtcTime = 1000000000; // below this, lastPlayed is an imported rank, not a date
 constexpr const char* kTabLabels[kTabCount] = {"All", "Fav", "DS", "GBA", "Recent"};
+constexpr uint16_t kTileText = rgb(31, 31, 31); // generated tiles use mid-tone colors in every theme
 
 // 9x9 star, bit 8 = leftmost pixel.
 constexpr uint16_t kStar[9] = {0x010, 0x010, 0x038, 0x1FF, 0x0FE, 0x07C, 0x06C, 0x0C6, 0x082};
@@ -54,10 +55,10 @@ std::string sizeText(uint32_t bytes) {
 	return std::to_string(bytes >> 10) + " KB";
 }
 
-uint16_t tileColor(const GameEntry& game) {
+uint16_t tileColor(const Theme& theme, const GameEntry& game) {
 	uint32_t hash = 2166136261u;
 	for (char c : game.title) hash = (hash ^ uint8_t(c)) * 16777619u;
-	const uint16_t* shades = game.system == System::Nds ? palette::kNdsShades : palette::kGbaShades;
+	const uint16_t* shades = game.system == System::Nds ? theme.ndsShades : theme.gbaShades;
 	return shades[hash % 4];
 }
 
@@ -72,59 +73,62 @@ std::string playedText(const GameStats* stats) {
 	return "Played " + std::to_string(stats->timesPlayed) + " times";
 }
 
-void drawTabs(Canvas& canvas, Tab active) {
+void drawTabs(Canvas& canvas, const Theme& theme, Tab active) {
 	for (int i = 0; i < kTabCount; ++i) {
 		const Rect r = tabRect(i);
 		const bool on = i == int(active);
-		canvas.fillRect({r.x + 1, r.y, r.w - 2, r.h}, on ? palette::kAccent : palette::kSurface);
-		drawCentered(canvas, smallFont(), r, kTabLabels[i], on ? palette::kText : palette::kMuted);
+		canvas.fillRect({r.x + 1, r.y, r.w - 2, r.h}, on ? theme.accent : theme.surface);
+		drawCentered(canvas, smallFont(), r, kTabLabels[i], on ? theme.text : theme.muted);
 	}
 }
 
 void drawFooter(Canvas& canvas, const BrowserState& state) {
-	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, palette::kSurface);
+	const Theme& theme = *state.theme;
+	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.surface);
 	const size_t count = state.view->size();
 	const size_t size = pageSize(state.mode);
 	const size_t pages = count == 0 ? 1 : (count + size - 1) / size;
 	const size_t page = count == 0 ? 1 : pageStart(state.cursor, state.mode) / size + 1;
 	const int textY = kHintBarY + (kFooterH - smallFont().height) / 2;
-	canvas.drawText(smallFont(), 4, textY, "Page " + std::to_string(page) + "/" + std::to_string(pages), palette::kMuted);
+	canvas.drawText(smallFont(), 4, textY, "Page " + std::to_string(page) + "/" + std::to_string(pages), theme.muted);
 
 	const std::string sort = state.tab == Tab::Recent ? "Newest first" : std::string("Sort: ") + sortKeyLabel(state.sort);
-	canvas.drawText(smallFont(), kScreenW - 4 - textWidth(smallFont(), sort), textY, sort, palette::kMuted);
+	canvas.drawText(smallFont(), kScreenW - 4 - textWidth(smallFont(), sort), textY, sort, theme.muted);
 }
 
 void drawGridCell(Canvas& canvas, const BrowserState& state, size_t index) {
+	const Theme& theme = *state.theme;
 	const GameEntry& game = state.library->games[(*state.view)[index]];
 	const Rect cell = gridCellRect(int(index - pageStart(index, ViewMode::Grid)));
-	canvas.fillRect(cell, palette::kBackground);
+	canvas.fillRect(cell, theme.background);
 	if (index == state.cursor) {
-		canvas.fillRect({cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4}, palette::kSurfaceHigh);
-		canvas.strokeRect({cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4}, palette::kAccent, 2);
+		canvas.fillRect({cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4}, theme.surfaceHigh);
+		canvas.strokeRect({cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4}, theme.accent, 2);
 	}
-	drawGameTile(canvas, *state.library, *state.icons, game, cell.x + (cell.w - kIconSize) / 2,
+	drawGameTile(canvas, theme, *state.library, *state.icons, game, cell.x + (cell.w - kIconSize) / 2,
 		cell.y + (cell.h - kIconSize) / 2, kIconSize);
-	if (isFavorite(state, game)) drawStar(canvas, cell.x + cell.w - 13, cell.y + 4, palette::kFavorite);
+	if (isFavorite(state, game)) drawStar(canvas, cell.x + cell.w - 13, cell.y + 4, theme.favorite);
 }
 
 void drawListRow(Canvas& canvas, const BrowserState& state, size_t index) {
+	const Theme& theme = *state.theme;
 	const GameEntry& game = state.library->games[(*state.view)[index]];
 	const Rect r = listRowRect(int(index - pageStart(index, ViewMode::List)));
 	const bool selected = index == state.cursor;
-	canvas.fillRect(r, selected ? palette::kSurfaceHigh : palette::kBackground);
-	if (selected) canvas.fillRect({r.x, r.y, 3, r.h}, palette::kAccent);
-	drawGameTile(canvas, *state.library, *state.icons, game, 6, r.y, 16);
+	canvas.fillRect(r, selected ? theme.surfaceHigh : theme.background);
+	if (selected) canvas.fillRect({r.x, r.y, 3, r.h}, theme.accent);
+	drawGameTile(canvas, theme, *state.library, *state.icons, game, 6, r.y, 16);
 	const bool favorite = isFavorite(state, game);
 	const int textW = kScreenW - 28 - (favorite ? 14 : 4);
 	canvas.drawText(smallFont(), 28, r.y + (r.h - smallFont().height) / 2, ellipsize(smallFont(), game.title, textW),
-		selected ? palette::kText : palette::kMuted);
-	if (favorite) drawStar(canvas, kScreenW - 12, r.y + 3, palette::kFavorite);
+		selected ? theme.text : theme.muted);
+	if (favorite) drawStar(canvas, kScreenW - 12, r.y + 3, theme.favorite);
 }
 
 } // namespace
 
-void drawGameTile(Canvas& canvas, const LibraryData& library, IconCache& icons, const GameEntry& game, int x, int y,
-	int size) {
+void drawGameTile(Canvas& canvas, const Theme& theme, const LibraryData& library, IconCache& icons, const GameEntry& game,
+	int x, int y, int size) {
 	if (game.iconIndex >= 0) {
 		const uint16_t* pixels = icons.get(library.icons, game.iconIndex);
 		if (size >= kIconSize) {
@@ -139,39 +143,49 @@ void drawGameTile(Canvas& canvas, const LibraryData& library, IconCache& icons, 
 		return;
 	}
 
-	canvas.fillRect({x, y, size, size}, tileColor(game));
+	canvas.fillRect({x, y, size, size}, tileColor(theme, game));
 	const std::string initials = initialsFor(game.title);
 	const Font& font = size >= kIconSize ? largeFont() : smallFont();
 	const int scale = size >= kIconSize ? size / kIconSize : 1;
 	const int w = textWidth(font, initials) * scale;
-	canvas.drawText(font, x + (size - w) / 2, y + (size - font.height * scale) / 2, initials, palette::kText, scale);
+	canvas.drawText(font, x + (size - w) / 2, y + (size - font.height * scale) / 2, initials, kTileText, scale);
 }
 
 void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
-	canvas.fill(palette::kBackground);
-	canvas.fillRect({0, 0, kScreenW, kHeaderH}, palette::kSurface);
+	const Theme& theme = *state.theme;
+	canvas.fill(theme.background);
+	canvas.fillRect({0, 0, kScreenW, kHeaderH}, theme.surface);
 	const int headerY = (kHeaderH - smallFont().height) / 2;
-	canvas.drawText(smallFont(), 4, headerY, "DSCore", palette::kAccent);
-	if (state.view && !state.view->empty()) {
+	const std::string title = state.query.empty() ? "DSCore" : "Search: " + std::string(state.query);
+	canvas.drawText(smallFont(), 4, headerY, ellipsize(smallFont(), title, kScreenW / 2), theme.accent);
+	const GameEntry* game = selectedGame(state);
+	if (game) {
 		const std::string position = std::to_string(state.cursor + 1) + "/" + std::to_string(state.view->size());
-		canvas.drawText(smallFont(), kScreenW - 4 - textWidth(smallFont(), position), headerY, position, palette::kMuted);
+		const int positionX = kScreenW - 4 - textWidth(smallFont(), position);
+		canvas.drawText(smallFont(), positionX, headerY, position, theme.muted);
+		if (isFavorite(state, *game)) drawStar(canvas, positionX - 14, (kHeaderH - 9) / 2, theme.favorite);
 	}
 
-	const GameEntry* game = selectedGame(state);
 	if (!game) {
 		const Rect middle = {0, kHeaderH, kScreenW, kHintBarY - kHeaderH};
-		drawCentered(canvas, largeFont(), {middle.x, middle.y + middle.h / 2 - 20, middle.w, 20}, "No games here", palette::kText);
+		drawCentered(canvas, largeFont(), {middle.x, middle.y + middle.h / 2 - 20, middle.w, 20}, "No games here", theme.text);
 		drawCentered(canvas, smallFont(), {middle.x, middle.y + middle.h / 2 + 4, middle.w, 14},
-			state.tab == Tab::All ? "Add ROMs to sd:/roms/NDS or sd:/roms/GBA" : "Press L/R to change tab", palette::kMuted);
+			state.tab == Tab::All ? "Add ROMs to sd:/roms/NDS or sd:/roms/GBA" : "Press L/R to change tab", theme.muted);
 	} else {
-		canvas.fillRect({12, 28, 104, 104}, palette::kSurface);
-		drawGameTile(canvas, *state.library, *state.icons, *game, 16, 32, 96);
+		const Rect art = {8, 24, 112, 112};
+		canvas.fillRect(art, theme.surface);
+		if (state.cover) {
+			canvas.blit(state.cover->pixels.data(), state.cover->width, state.cover->height,
+				art.x + (art.w - state.cover->width) / 2, art.y + (art.h - state.cover->height) / 2);
+		} else {
+			drawGameTile(canvas, theme, *state.library, *state.icons, *game, art.x + 8, art.y + 8, 96);
+		}
 
 		const int textX = 126;
 		const int textW = kScreenW - textX - 8;
 		int y = 30;
 		for (const std::string& line : wrapText(largeFont(), game->title, textW, 3)) {
-			canvas.drawText(largeFont(), textX, y, line, palette::kText);
+			canvas.drawText(largeFont(), textX, y, line, theme.text);
 			y += largeFont().height + 2;
 		}
 		y += 6;
@@ -181,27 +195,25 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 		std::vector<std::string> info = {systemName(game->system), sizeLine, playedText(stats)};
 		if (stats && stats->lastPlayed >= kFirstRtcTime) info.push_back("Last: " + formatDate(stats->lastPlayed));
 		for (const std::string& line : info) {
-			canvas.drawText(smallFont(), textX, y, ellipsize(smallFont(), line, textW), palette::kMuted);
+			canvas.drawText(smallFont(), textX, y, ellipsize(smallFont(), line, textW), theme.muted);
 			y += smallFont().height + 2;
 		}
-		if (stats && stats->favorite) {
-			drawStar(canvas, textX, y + 2, palette::kFavorite);
-			canvas.drawText(smallFont(), textX + 13, y + 1, "Favorite", palette::kFavorite);
-		}
 		// The file name tells apart dumps with the same title.
-		canvas.drawText(smallFont(), 12, 142, ellipsize(smallFont(), fileName(game->path), kScreenW - 24), palette::kMuted);
+		canvas.drawText(smallFont(), 8, kHintBarY - smallFont().height - 4, ellipsize(smallFont(), fileName(game->path), kScreenW - 16),
+			theme.muted);
 	}
 
-	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, palette::kSurface);
-	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, "A:Play Y:Fav L/R:Tab START:Sort SEL:View",
-		palette::kMuted);
+	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.surface);
+	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, state.query.empty() ? "A:Play X:Find Y:Fav START:Menu SEL:View" : "A:Play X:Find B:Clear search Y:Fav",
+		theme.muted);
 }
 
 void drawBrowserScreen(Canvas& canvas, const BrowserState& state) {
-	canvas.fill(palette::kBackground);
-	drawTabs(canvas, state.tab);
+	const Theme& theme = *state.theme;
+	canvas.fill(theme.background);
+	drawTabs(canvas, theme, state.tab);
 	if (state.view->empty()) {
-		drawCentered(canvas, smallFont(), {0, kContentY, kScreenW, kContentH}, "Nothing in this tab", palette::kMuted);
+		drawCentered(canvas, smallFont(), {0, kContentY, kScreenW, kContentH}, "Nothing in this tab", theme.muted);
 	} else {
 		const size_t first = pageStart(state.cursor, state.mode);
 		const size_t last = std::min(state.view->size(), first + pageSize(state.mode));
@@ -216,13 +228,76 @@ void drawBrowserItem(Canvas& canvas, const BrowserState& state, size_t index) {
 	else drawListRow(canvas, state, index);
 }
 
-void drawMessageScreen(Canvas& canvas, const std::string& title, const std::vector<std::string>& lines) {
-	canvas.fill(palette::kBackground);
+void drawSearchScreen(Canvas& canvas, const BrowserState& state) {
+	const Theme& theme = *state.theme;
+	canvas.fill(theme.background);
+	canvas.fillRect({0, 0, kScreenW, kHeaderH}, theme.surface);
+	canvas.drawText(smallFont(), 4, (kHeaderH - smallFont().height) / 2, "Search", theme.accent);
+
+	const Rect field = {8, kHeaderH + 8, kScreenW - 16, largeFont().height + 8};
+	canvas.fillRect(field, theme.surfaceHigh);
+	canvas.fillRect({field.x, field.y + field.h - 2, field.w, 2}, theme.accent);
+	const std::string shown = std::string(state.query) + "_";
+	const int maxChars = (field.w - 8) / largeFont().width;
+	const std::string tail = int(shown.size()) > maxChars ? shown.substr(shown.size() - size_t(maxChars)) : shown;
+	canvas.drawText(largeFont(), field.x + 4, field.y + 4, tail, theme.text);
+
+	const size_t count = state.view->size();
+	int y = field.y + field.h + 6;
+	const std::string summary = count == 1 ? "1 game" : std::to_string(count) + " games";
+	canvas.drawText(smallFont(), 8, y, state.query.empty() ? "Type a name" : summary, theme.muted);
+	y += smallFont().height + 6;
+	for (size_t i = 0; i < count && y + smallFont().height <= kHintBarY - 2; ++i, y += smallFont().height + 3) {
+		const GameEntry& game = state.library->games[(*state.view)[i]];
+		canvas.drawText(smallFont(), 8, y, ellipsize(smallFont(), game.title, kScreenW - 16), theme.text);
+	}
+
+	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.surface);
+	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, "A:Type B:Delete START:Done", theme.muted);
+}
+
+void drawKeyboardScreen(Canvas& canvas, const Theme& theme, int selectedKey) {
+	canvas.fill(theme.background);
+	drawCentered(canvas, smallFont(), {0, 0, kScreenW, 22}, "Type part of a game's name", theme.muted);
+	const std::vector<Key>& keys = keyboardKeys();
+	for (size_t i = 0; i < keys.size(); ++i) {
+		const Key& key = keys[i];
+		const bool selected = int(i) == selectedKey;
+		canvas.fillRect(key.rect, selected ? theme.accent : theme.surfaceHigh);
+		const Font& font = key.kind == KeyKind::Char ? largeFont() : smallFont();
+		drawCentered(canvas, font, key.rect, key.label, theme.text);
+	}
+	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.surface);
+	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, "Touch or use the D-pad", theme.muted);
+}
+
+void drawMenuScreen(Canvas& canvas, const Theme& theme, const std::vector<MenuItem>& items, int selected) {
+	canvas.fill(theme.background);
+	drawCentered(canvas, largeFont(), {0, 4, kScreenW, largeFont().height}, "Options", theme.text);
+	for (size_t i = 0; i < items.size(); ++i) {
+		const Rect r = menuRowRect(int(i));
+		const bool on = int(i) == selected;
+		canvas.fillRect(r, on ? theme.surfaceHigh : theme.surface);
+		if (on) canvas.fillRect({r.x, r.y, 3, r.h}, theme.accent);
+		const int textY = r.y + (r.h - smallFont().height) / 2;
+		canvas.drawText(smallFont(), r.x + 10, textY, items[i].label, on ? theme.text : theme.muted);
+		if (!items[i].value.empty()) {
+			const std::string value = "< " + items[i].value + " >";
+			canvas.drawText(smallFont(), r.x + r.w - 8 - textWidth(smallFont(), value), textY, value,
+				on ? theme.accent : theme.muted);
+		}
+	}
+	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.surface);
+	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, "Left/Right:Change A:Select B:Close", theme.muted);
+}
+
+void drawMessageScreen(Canvas& canvas, const Theme& theme, const std::string& title, const std::vector<std::string>& lines) {
+	canvas.fill(theme.background);
 	int y = kScreenH / 2 - 10 - int(lines.size()) * 7;
-	drawCentered(canvas, largeFont(), {0, y, kScreenW, largeFont().height}, title, palette::kText);
+	drawCentered(canvas, largeFont(), {0, y, kScreenW, largeFont().height}, title, theme.text);
 	y += largeFont().height + 8;
 	for (const std::string& line : lines) {
-		drawCentered(canvas, smallFont(), {8, y, kScreenW - 16, smallFont().height}, line, palette::kMuted);
+		drawCentered(canvas, smallFont(), {8, y, kScreenW - 16, smallFont().height}, line, theme.muted);
 		y += smallFont().height + 2;
 	}
 }

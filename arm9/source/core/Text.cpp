@@ -6,6 +6,16 @@ namespace dscore {
 
 namespace {
 
+uint32_t unitAt(const uint8_t* data, size_t i) {
+	return data[2 * i] | (uint32_t(data[2 * i + 1]) << 8);
+}
+
+char lowerAscii(char c) {
+	return (c >= 'A' && c <= 'Z') ? char(c - 'A' + 'a') : c;
+}
+
+} // namespace
+
 void appendUtf8(std::string& out, uint32_t cp) {
 	if (cp < 0x80) {
 		out += char(cp);
@@ -24,16 +34,6 @@ void appendUtf8(std::string& out, uint32_t cp) {
 	}
 }
 
-uint32_t unitAt(const uint8_t* data, size_t i) {
-	return data[2 * i] | (uint32_t(data[2 * i + 1]) << 8);
-}
-
-char lowerAscii(char c) {
-	return (c >= 'A' && c <= 'Z') ? char(c - 'A' + 'a') : c;
-}
-
-} // namespace
-
 std::string utf16leToUtf8(const uint8_t* data, size_t maxUnits) {
 	std::string out;
 	for (size_t i = 0; i < maxUnits; ++i) {
@@ -49,6 +49,33 @@ std::string utf16leToUtf8(const uint8_t* data, size_t maxUnits) {
 		}
 		if (u >= 0xD800 && u <= 0xDFFF) u = 0xFFFD;
 		appendUtf8(out, u);
+	}
+	return out;
+}
+
+std::vector<uint32_t> decodeUtf8(std::string_view text) {
+	std::vector<uint32_t> out;
+	for (size_t i = 0; i < text.size();) {
+		const unsigned char c = static_cast<unsigned char>(text[i]);
+		int extra = 0;
+		uint32_t cp = c;
+		if (c >= 0xF8) { out.push_back(0xFFFDu); ++i; continue; }
+		if (c >= 0xF0) { extra = 3; cp = c & 0x07; }
+		else if (c >= 0xE0) { extra = 2; cp = c & 0x0F; }
+		else if (c >= 0xC0) { extra = 1; cp = c & 0x1F; }
+		else if (c >= 0x80) { out.push_back(0xFFFDu); ++i; continue; }
+		if (i + size_t(extra) >= text.size() && extra > 0) { // truncated sequence
+			out.push_back(0xFFFDu);
+			break;
+		}
+		bool valid = true;
+		for (int k = 1; k <= extra; ++k) {
+			const unsigned char cc = static_cast<unsigned char>(text[i + size_t(k)]);
+			if ((cc & 0xC0) != 0x80) valid = false;
+			cp = (cp << 6) | (cc & 0x3F);
+		}
+		out.push_back(valid ? cp : 0xFFFDu);
+		i += size_t(extra) + 1;
 	}
 	return out;
 }

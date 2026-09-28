@@ -16,6 +16,9 @@ public:
 
 	IconCache() : slots_(kSlots) {}
 
+	// Forgets every icon, e.g. when the library is rebuilt and icon indexes change.
+	void clear();
+
 	// Pixels (kIconSize x kIconSize) of icons[index], decoding it if it is not cached.
 	const uint16_t* get(const std::vector<NdsIcon>& icons, int index);
 

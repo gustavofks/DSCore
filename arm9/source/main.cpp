@@ -25,6 +25,10 @@ using namespace dscore;
 const std::vector<std::string> kRomRoots = {"sd:/roms/NDS", "sd:/roms/GBA"};
 constexpr int kConfigSaveDelayFrames = 120; // batch cursor moves into one SD write
 constexpr size_t kProgressEvery = 8;        // redraw the indexing screen every few games
+constexpr int kCoverDelayFrames = 8;        // load box art once the cursor rests, not while scrolling
+
+// Theme of the message screens (loading, errors); follows the one chosen in the options menu.
+const Theme* messageTheme = &builtInThemes()[0];
 
 // Milliseconds since boot, from the cascaded timers started in main().
 unsigned elapsedMs() {
@@ -33,8 +37,8 @@ unsigned elapsedMs() {
 
 void showMessage(Screens& screens, const std::string& topTitle, const std::vector<std::string>& topLines,
 	const std::string& bottomTitle, const std::vector<std::string>& bottomLines) {
-	drawMessageScreen(screens.top(), topTitle, topLines);
-	drawMessageScreen(screens.bottom(), bottomTitle, bottomLines);
+	drawMessageScreen(screens.top(), *messageTheme, topTitle, topLines);
+	drawMessageScreen(screens.bottom(), *messageTheme, bottomTitle, bottomLines);
 	screens.present();
 }
 
@@ -48,12 +52,12 @@ BannerLanguage systemLanguage() {
 	return language <= int(BannerLanguage::Spanish) ? BannerLanguage(language) : BannerLanguage::English;
 }
 
-// Loads the cached library and brings it up to date with the SD card, showing progress while new
-// games are indexed. Appends timings to log.
-LibraryData loadLibrary(Screens& screens, std::string& log) {
+// Loads the cached library (unless rebuilding) and brings it up to date with the SD card, showing
+// progress while new games are indexed. Appends timings to log.
+LibraryData loadLibrary(Screens& screens, std::string& log, bool rebuild = false) {
 	LibraryData library;
 	unsigned start = elapsedMs();
-	const bool cached = storage::loadLibrary(library);
+	const bool cached = !rebuild && storage::loadLibrary(library);
 	log += "cache: " + std::string(cached ? "loaded" : "missing") + ", " + std::to_string(library.games.size()) +
 	       " games, " + std::to_string(elapsedMs() - start) + " ms\n";
 
@@ -100,11 +104,13 @@ std::string handleInput(App& app) {
 	if (repeat & KEY_LEFT) apply(Action::Left);
 	if (repeat & KEY_RIGHT) apply(Action::Right);
 	if (down & KEY_A) apply(Action::Launch);
+	if (down & KEY_B) apply(Action::Back);
+	if (down & KEY_X) apply(Action::Search);
 	if (down & KEY_Y) apply(Action::Favorite);
 	if (down & KEY_L) apply(Action::PrevTab);
 	if (down & KEY_R) apply(Action::NextTab);
 	if (down & KEY_SELECT) apply(Action::ToggleView);
-	if (down & KEY_START) apply(Action::CycleSort);
+	if (down & KEY_START) apply(Action::Menu);
 	if (down & KEY_TOUCH) {
 		touchPosition touch;
 		touchRead(&touch);
@@ -112,6 +118,35 @@ std::string handleInput(App& app) {
 	}
 	return launch;
 }
+
+// Loads the selected game's box art after the cursor has rested for a few frames, remembering games
+// that have none so their file is not looked up again.
+class CoverLoader {
+public:
+	void update(App& app) {
+		const GameEntry* game = app.selected();
+		const std::string path = game ? game->path : std::string();
+		if (path != pending_) {
+			pending_ = path;
+			restingFrames_ = 0;
+			return;
+		}
+		if (path.empty() || path == loaded_ || ++restingFrames_ < kCoverDelayFrames) return;
+		loaded_ = path;
+		std::optional<Cover> cover;
+		if (!missing_.count(path)) {
+			cover = storage::loadCover(path);
+			if (!cover) missing_.insert(path);
+		}
+		app.setCover(path, std::move(cover));
+	}
+
+private:
+	std::string pending_;
+	std::string loaded_;
+	int restingFrames_ = 0;
+	std::set<std::string> missing_;
+};
 
 // Drawing cost of the frames since boot, logged before each launch.
 struct DrawStats {
@@ -166,9 +201,12 @@ int main(int argc, char** argv) {
 
 	std::string log = "DSCore boot\n";
 	Config config = storage::loadConfig();
+	const std::vector<Theme> themes = storage::loadThemes();
+	messageTheme = &findTheme(themes, config.theme);
 	UserData userData = storage::loadUserData();
-	const LibraryData library = loadLibrary(screens, log);
+	LibraryData library = loadLibrary(screens, log);
 	App app(library, userData, config);
+	app.setThemes(themes);
 	log += "ready: " + std::to_string(elapsedMs()) + " ms since start\n";
 
 	// One full redraw of both screens: the cost of every cursor move.
@@ -183,6 +221,7 @@ int main(int argc, char** argv) {
 	keysSetRepeat(15, 4);
 	int configSaveCountdown = -1;
 	DrawStats drawStats;
+	CoverLoader covers;
 	while (true) {
 		if (powerButtonPressed()) {
 			if (configSaveCountdown > 0) storage::saveConfig(config);
@@ -196,6 +235,14 @@ int main(int argc, char** argv) {
 			app.invalidate();
 			continue;
 		}
+		if (app.takeRebuildRequest()) {
+			std::string rebuildLog = "rebuild\n";
+			library = loadLibrary(screens, rebuildLog, true);
+			storage::appendLog(rebuildLog);
+			app.libraryChanged();
+		}
+		messageTheme = &app.theme();
+		covers.update(app);
 		if (app.takeUserDataChanged()) storage::saveUserData(userData);
 		if (app.takeConfigChanged()) configSaveCountdown = kConfigSaveDelayFrames;
 		if (configSaveCountdown > 0 && --configSaveCountdown == 0) storage::saveConfig(config);

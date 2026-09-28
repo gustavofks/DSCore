@@ -4,12 +4,19 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace dscore {
 
 // Converts little-endian UTF-16 to UTF-8, stopping at the first NUL or after maxUnits code units.
 // Lone surrogates become U+FFFD.
 std::string utf16leToUtf8(const uint8_t* data, size_t maxUnits);
+
+// Appends codepoint cp encoded as UTF-8.
+void appendUtf8(std::string& out, uint32_t cp);
+
+// Decodes UTF-8 into codepoints; malformed bytes become U+FFFD.
+std::vector<uint32_t> decodeUtf8(std::string_view text);
 
 // Case-insensitive ASCII suffix match that requires at least one character before the extension.
 bool hasExtension(std::string_view name, std::string_view ext);
