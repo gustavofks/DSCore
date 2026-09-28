@@ -7,14 +7,18 @@ Usage: python tools/fetch_covers.py <sd-root> [--twilight] [--force]
   --twilight  Also save the original PNGs where TWiLight Menu++ looks for box art.
   --force     Download again covers that already exist.
 
-DS covers come from GameTDB by game code; GBA covers from libretro-thumbnails by No-Intro file name.
+DS covers come from GameTDB by game code. When GameTDB has none, and for GBA games, the game code read
+from the ROM is looked up in libretro-database's No-Intro data to get the exact title that
+libretro-thumbnails uses; the file name is the last resort.
 Each cover is scaled to fit 112x112 and written to _nds/DSCore/covers/<rom file name>.bin in DSCore's
 format: "DSCV", width and height (u16 LE), then width*height DS colors (u16 LE, bit 15 set).
 Only the Python standard library is used.
 """
 import os
+import re
 import struct
 import sys
+import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -22,7 +26,14 @@ import zlib
 
 MAX_SIZE = 112
 GAMETDB = "https://art.gametdb.com/ds/coverS/{region}/{code}.png"
-LIBRETRO_GBA = "https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance/master/Named_Boxarts/{name}.png"
+LIBRETRO_THUMBS = "https://raw.githubusercontent.com/libretro-thumbnails/{system}/master/Named_Boxarts/{name}.png"
+LIBRETRO_DB = "https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/"
+DATS = {  # system -> (thumbnail repository, database file with game codes)
+    "nds": ("Nintendo_-_Nintendo_DS", "no-intro/Nintendo%20-%20Nintendo%20DS.dat"),
+    "gba": ("Nintendo_-_Game_Boy_Advance", "no-intro/Nintendo%20-%20Game%20Boy%20Advance.dat"),
+}
+DAT_MAX_AGE = 7 * 24 * 3600
+REGION_PREFERENCE = ["(USA", "(World", "(Europe"]
 # GameTDB region folder from the last letter of a DS game code.
 REGIONS = {"E": ["US"], "P": ["EN", "US"], "J": ["JA"], "K": ["KO"], "F": ["FR", "EN"], "D": ["DE", "EN"],
            "S": ["ES", "EN"], "I": ["IT", "EN"], "H": ["NL", "EN"], "U": ["AU", "EN"], "O": ["US", "EN"]}
@@ -132,22 +143,56 @@ def download(url):
         return None
 
 
-def ds_game_code(path):
+def game_code(path, offset):
     with open(path, "rb") as f:
-        header = f.read(0x10)
-    code = header[0x0C:0x10].decode("ascii", "replace")
+        f.seek(offset)
+        code = f.read(4).decode("ascii", "replace")
     return code if code.isalnum() and len(code) == 4 else None
 
 
-def fetch_ds(path):
-    code = ds_game_code(path)
+def load_titles(system):
+    """Game code -> No-Intro titles (best region first), from libretro-database, cached for a week."""
+    cache = os.path.join(tempfile.gettempdir(), f"dscore-{system}.dat")
+    if not os.path.exists(cache) or time.time() - os.path.getmtime(cache) > DAT_MAX_AGE:
+        data = download(LIBRETRO_DB + DATS[system][1])
+        if data:
+            with open(cache, "wb") as f:
+                f.write(data)
+    if not os.path.exists(cache):
+        return {}
+    text = open(cache, encoding="utf-8", errors="replace").read()
+    titles = {}
+    for block in text.split("\ngame (")[1:]:
+        name = re.search(r'^\s*(?:name|comment) "([^"]+)"', block, re.M)
+        serial = re.search(r'^\s*serial "(?:AGB-)?([0-9A-Z]{4})', block, re.M)
+        if name and serial:
+            titles.setdefault(serial.group(1), []).append(name.group(1))
+
+    def rank(title):
+        return next((i for i, region in enumerate(REGION_PREFERENCE) if region in title), len(REGION_PREFERENCE))
+
+    return {code: sorted(names, key=rank) for code, names in titles.items()}
+
+
+def fetch_thumbnail(system, names):
+    for name in dict.fromkeys(names):  # unique, in order
+        # libretro-thumbnails replaces these characters in file names.
+        safe = "".join("_" if c in '&*/:`<>?\\|"' else c for c in name)
+        png = download(LIBRETRO_THUMBS.format(system=DATS[system][0], name=urllib.parse.quote(safe)))
+        if png:
+            return png
+    return None
+
+
+def fetch_ds(path, titles):
+    code = game_code(path, 0x0C)
     if not code:
         return None, None
     for region in REGIONS.get(code[3], ["US", "EN"]):
         png = download(GAMETDB.format(region=region, code=code))
         if png:
             return png, code
-    return None, code
+    return fetch_thumbnail("nds", titles.get(code, [])), code
 
 
 def strip_tags(stem):
@@ -156,16 +201,11 @@ def strip_tags(stem):
     return stem
 
 
-def fetch_gba(path):
+def fetch_gba(path, titles):
+    code = game_code(path, 0xAC)
     stem = os.path.splitext(os.path.basename(path))[0]
-    names = [stem] + [strip_tags(stem) + suffix for suffix in GBA_REGION_SUFFIXES]
-    for name in dict.fromkeys(names):  # unique, in order
-        # libretro-thumbnails replaces these characters in file names.
-        safe = "".join("_" if c in '&*/:`<>?\\|"' else c for c in name)
-        png = download(LIBRETRO_GBA.format(name=urllib.parse.quote(safe)))
-        if png:
-            return png
-    return None
+    names = titles.get(code, []) + [stem] + [strip_tags(stem) + suffix for suffix in GBA_REGION_SUFFIXES]
+    return fetch_thumbnail("gba", names)
 
 
 # --- Main -----------------------------------------------------------------------------------------
@@ -190,6 +230,7 @@ def main():
     if save_twilight:
         os.makedirs(boxart_dir, exist_ok=True)
 
+    titles = {system: load_titles(system) for system in DATS}
     found = skipped = 0
     missing = []
     roms = list(list_roms(sd_root))
@@ -200,10 +241,10 @@ def main():
             skipped += 1
             continue
         if ext == ".nds":
-            png, code = fetch_ds(path)
+            png, code = fetch_ds(path, titles["nds"])
             twilight_name = (code or name) + ".png"
         else:
-            png, twilight_name = fetch_gba(path), name + ".png"
+            png, twilight_name = fetch_gba(path, titles["gba"]), name + ".png"
         if not png:
             missing.append(name)
             print(f"[{i}/{len(roms)}] no cover: {name}")

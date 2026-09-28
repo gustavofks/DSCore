@@ -89,3 +89,6 @@ firmware*.bin
 *.map
 /data/
 tests/build/
+
+# Python
+__pycache__/
