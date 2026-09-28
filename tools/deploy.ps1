@@ -20,6 +20,14 @@ $twl = Join-Path $Target '_nds\TWiLightMenu'
 if (-not (Test-Path $nds)) { throw "dscore.nds not found. Run 'tools\dk.ps1 make' first." }
 if (-not (Test-Path (Join-Path $twl 'main.srldr'))) { throw "TWiLight Menu++ not found in $twl" }
 
+$themes = Join-Path $root 'themes'
+$themesDest = Join-Path $Target '_nds\DSCore\themes'
+if (Test-Path $themes) {
+	New-Item -ItemType Directory -Force $themesDest | Out-Null
+	Copy-Item (Join-Path $themes '*.ini') $themesDest -Force
+	Write-Host "Themes copied to $themesDest"
+}
+
 if ($Mode -eq 'app') {
 	$dest = Join-Path $Target 'dscore.nds'
 	Copy-Item $nds $dest -Force
