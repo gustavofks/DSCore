@@ -27,6 +27,7 @@ struct BrowserState {
 	size_t cursor = 0;                          // position in view
 	const std::vector<Tab>* tabs = nullptr;    // the tab bar, left to right
 	Tab tab = Tab::all();
+	Filter filter = Filter::All;
 	SortKey sort = SortKey::Name;
 	ViewMode mode = ViewMode::Grid;
 };

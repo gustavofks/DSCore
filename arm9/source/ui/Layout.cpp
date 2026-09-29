@@ -42,6 +42,14 @@ Rect listRowRect(int row) {
 	return {0, kContentY + row * kListRowH, kScreenW, kListRowH};
 }
 
+Rect footerFilterRect() {
+	return {0, kScreenH - kFooterH, kScreenW * 2 / 5, kFooterH};
+}
+
+Rect footerSortRect() {
+	return {kScreenW * 3 / 5, kScreenH - kFooterH, kScreenW * 2 / 5, kFooterH};
+}
+
 Rect menuRowRect(int row) {
 	return {12, kMenuTop + row * kMenuRowH, kScreenW - 24, kMenuRowH - 4};
 }

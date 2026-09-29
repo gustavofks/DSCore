@@ -87,9 +87,12 @@ void drawFooter(Canvas& canvas, const BrowserState& state) {
 	const size_t pages = count == 0 ? 1 : (count + size - 1) / size;
 	const size_t page = count == 0 ? 1 : pageStart(state.cursor, state.mode) / size + 1;
 	const int textY = kHintBarY + (kFooterH - smallFont().height) / 2;
-	canvas.drawText(smallFont(), 4, textY, "Page " + std::to_string(page) + "/" + std::to_string(pages), theme.muted);
-
-	const std::string sort = state.tab.kind == Tab::Kind::Recent ? "Newest first" : std::string("Sort: ") + sortKeyLabel(state.sort);
+	// Filter on the left and sort order on the right: touching either cycles it (see layout::footer*Rect).
+	const std::string filter = filterLabel(state.filter);
+	canvas.drawText(smallFont(), 4, textY, filter, state.filter == Filter::All ? theme.muted : theme.accent);
+	drawCentered(canvas, smallFont(), {kScreenW * 2 / 5, kHintBarY, kScreenW / 5, kFooterH},
+		std::to_string(page) + "/" + std::to_string(pages), theme.muted);
+	const std::string sort = sortKeyLabel(state.sort);
 	canvas.drawText(smallFont(), kScreenW - 4 - textWidth(smallFont(), sort), textY, sort, theme.muted);
 }
 
@@ -177,7 +180,8 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 		const Rect middle = {0, kHeaderH, kScreenW, kHintBarY - kHeaderH};
 		drawCentered(canvas, largeFont(), {middle.x, middle.y + middle.h / 2 - 20, middle.w, 20}, "No games here", theme.text);
 		drawCentered(canvas, smallFont(), {middle.x, middle.y + middle.h / 2 + 4, middle.w, 14},
-			state.tab.kind == Tab::Kind::All ? "Add ROMs under sd:/roms" : "Press L/R to change tab", theme.muted);
+			state.filter != Filter::All ? "SELECT changes the filter"
+			: state.tab.kind == Tab::Kind::All ? "Add ROMs under sd:/roms" : "Press L/R to change tab", theme.muted);
 	} else {
 		const Rect art = {8, 24, 112, 112};
 		canvas.fillRect(art, theme.surface);
@@ -211,7 +215,7 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 	}
 
 	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.surface);
-	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, state.query.empty() ? "A:Play X:Find Y:Fav START:Menu SEL:View" : "A:Play X:Find B:Clear search Y:Fav",
+	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, state.query.empty() ? "A:Play X:Find Y:Fav START:Menu SEL:Filter" : "A:Play X:Find B:Clear search Y:Fav",
 		theme.muted);
 }
 

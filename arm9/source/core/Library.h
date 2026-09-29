@@ -22,15 +22,13 @@ struct GameEntry {
 	bool portuguese = false; // Portuguese release or fan translation (see parseFileTags)
 };
 
-// A bottom-screen tab: every game, favorites, recently played, or the games of one console.
+// A bottom-screen tab: every game, or the games of one console.
 struct Tab {
-	enum class Kind : uint8_t { All, Favorites, Console, Recent };
+	enum class Kind : uint8_t { All, Console };
 	Kind kind = Kind::All;
 	System system = System::Nds; // only meaningful for Console
 
 	static constexpr Tab all() { return {Kind::All, System::Nds}; }
-	static constexpr Tab favorites() { return {Kind::Favorites, System::Nds}; }
-	static constexpr Tab recent() { return {Kind::Recent, System::Nds}; }
 	static constexpr Tab console(System system) { return {Kind::Console, system}; }
 
 	bool operator==(const Tab& other) const {
@@ -39,28 +37,37 @@ struct Tab {
 	bool operator!=(const Tab& other) const { return !(*this == other); }
 };
 
-enum class SortKey : uint8_t { Name, System, MostPlayed };
+// Which games of the tab are listed.
+enum class Filter : uint8_t { All, Favorites, Played, NotPlayed, Portuguese };
+constexpr int kFilterCount = int(Filter::Portuguese) + 1;
 
-// The tabs shown for this library: All, Favorites, one tab per console with at least one game (in
-// System order), then Recent.
-std::vector<Tab> availableTabs(const std::vector<GameEntry>& games);
+// Values are stored in config.ini: append new ones.
+enum class SortKey : uint8_t { Name, System, MostPlayed, Recent };
+
+// The tabs shown for this library: All, then one tab per console with at least one game (in
+// displayOrder), leaving out consoles whose bit is set in hidden (bit = System value).
+std::vector<Tab> availableTabs(const std::vector<GameEntry>& games, uint32_t hidden = 0);
 
 // The tab direction steps away from current (+1 next, -1 previous), wrapping around. A current tab that
 // is not in tabs counts as the first one.
 Tab stepTab(const std::vector<Tab>& tabs, Tab current, int direction);
 
-SortKey nextSortKey(SortKey key);
+Filter stepFilter(Filter filter, int direction);
+SortKey stepSortKey(SortKey key, int direction); // Name, Recent, Most played, System
 const char* tabLabel(Tab tab); // short, fits the tab bar
+const char* filterLabel(Filter filter);
 const char* sortKeyLabel(SortKey key);
 
-// Config file key for a tab ("all", "favorites", "recent" or a system id) and back.
+// Config file keys ("all" or a system id; "favorites", "played", ...) and back.
 std::string tabId(Tab tab);
 bool tabFromId(std::string_view id, Tab& out);
+const char* filterId(Filter filter);
+bool filterFromId(std::string_view id, Filter& out);
 
-// Indexes into games for one tab, in display order, keeping only titles that match query (see
-// matchesQuery). The Recent tab lists played games newest first and ignores sort; every other order
+// Indexes into games for one tab, in display order, keeping the games that pass filter and whose title
+// matches query (see matchesQuery). Recent lists played games newest first, then the others; every order
 // breaks ties by title, then path.
-std::vector<size_t> libraryView(const std::vector<GameEntry>& games, const UserData& data, Tab tab, SortKey sort,
-	std::string_view query = {});
+std::vector<size_t> libraryView(const std::vector<GameEntry>& games, const UserData& data, Tab tab, Filter filter,
+	SortKey sort, std::string_view query = {});
 
 } // namespace dscore

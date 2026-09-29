@@ -39,6 +39,8 @@ constexpr int kMenuRowH = 24;
 // scrolls to keep the active tab in view (rects may then lie partly or wholly off screen).
 std::vector<Rect> tabRects(const std::vector<int>& labelWidths, int active);
 Rect menuRowRect(int row);
+Rect footerFilterRect(); // footer labels that cycle the filter and the sort order when touched
+Rect footerSortRect();
 Rect gridCellRect(int slot); // slot 0..kGridPerPage-1 on the current page
 Rect listRowRect(int row);
 

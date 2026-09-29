@@ -16,7 +16,7 @@ namespace dscore {
 enum class Sound : uint8_t { None, Move, Select, Back, Launch };
 
 enum class Action : uint8_t {
-	Up, Down, Left, Right, Launch, Back, Favorite, PrevTab, NextTab, ToggleView, Menu, Search, Tap
+	Up, Down, Left, Right, Launch, Back, Favorite, PrevTab, NextTab, NextFilter, Menu, Search, Tap
 };
 
 // Library browser state and input handling, independent of the hardware: the caller feeds actions,
@@ -70,6 +70,8 @@ private:
 	void select(size_t cursor);
 	void refreshTabs();
 	void switchTab(Tab tab, const std::string& currentPath);
+	void setFilter(Filter filter, const std::string& currentPath);
+	void setSort(SortKey sort, const std::string& currentPath);
 	std::string activate(size_t index);
 
 	const LibraryData& library_;
@@ -79,7 +81,7 @@ private:
 	std::vector<Tab> tabs_; // tab bar for the current library
 	std::vector<size_t> view_;
 	mutable IconCache icons_; // drawing is const but warms the cache
-	enum MenuRow { kSortRow, kViewRow, kThemeRow, kSoundRow, kRebuildRow, kCloseRow, kMenuRows };
+	enum MenuRow { kFilterRow, kSortRow, kViewRow, kThemeRow, kSoundRow, kRebuildRow, kCloseRow, kMenuRows };
 	std::vector<MenuItem> menuItems() const;
 	void handleMenu(Action action, int touchX, int touchY);
 	void activateMenuRow(int row, int direction);

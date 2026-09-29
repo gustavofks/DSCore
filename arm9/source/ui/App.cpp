@@ -56,12 +56,8 @@ std::string App::handle(Action action, int touchX, int touchY) {
 		case Action::NextTab:
 			switchTab(stepTab(tabs_, config_.tab, action == Action::NextTab ? 1 : -1), currentPath);
 			break;
-		case Action::ToggleView:
-			config_.view = config_.view == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
-			configChanged_ = true;
-			sound_ = Sound::Select;
-			bottomValid_ = false;
-			redraw_ = true;
+		case Action::NextFilter:
+			setFilter(stepFilter(config_.filter, 1), currentPath);
 			break;
 		case Action::Menu:
 			setMenuOpen(true);
@@ -70,6 +66,14 @@ std::string App::handle(Action action, int touchX, int touchY) {
 			const int tab = layout::tabAt(tabBarRects(tabs_, config_.tab), touchX, touchY);
 			if (tab >= 0) {
 				if (tabs_[size_t(tab)] != config_.tab) switchTab(tabs_[size_t(tab)], currentPath);
+				break;
+			}
+			if (layout::footerFilterRect().contains(touchX, touchY)) {
+				setFilter(stepFilter(config_.filter, 1), currentPath);
+				break;
+			}
+			if (layout::footerSortRect().contains(touchX, touchY)) {
+				setSort(stepSortKey(config_.sort, 1), currentPath);
 				break;
 			}
 			const int slot = config_.view == ViewMode::Grid ? layout::gridSlotAt(touchX, touchY)
@@ -169,6 +173,7 @@ BrowserState App::state() const {
 	s.cursor = cursor_;
 	s.tabs = &tabs_;
 	s.tab = config_.tab;
+	s.filter = config_.filter;
 	s.sort = config_.sort;
 	s.mode = config_.view;
 	s.query = query_;
@@ -178,7 +183,7 @@ BrowserState App::state() const {
 // Recomputes the visible games and keeps keepPath under the cursor when it is still listed; otherwise
 // the cursor goes to the first game or stays at the same position, clamped.
 void App::rebuildView(const std::string& keepPath, Missing missing) {
-	view_ = libraryView(library_.games, userData_, config_.tab, config_.sort, query_);
+	view_ = libraryView(library_.games, userData_, config_.tab, config_.filter, config_.sort, query_);
 	size_t cursor = missing == Missing::First ? 0 : std::min(cursor_, view_.empty() ? 0 : view_.size() - 1);
 	for (size_t i = 0; i < view_.size(); ++i) {
 		if (library_.games[view_[i]].path == keepPath) {
@@ -197,7 +202,7 @@ void App::rebuildView(const std::string& keepPath, Missing missing) {
 
 // Recomputes the tab bar; a saved tab whose console has no games left falls back to All.
 void App::refreshTabs() {
-	tabs_ = availableTabs(library_.games);
+	tabs_ = availableTabs(library_.games, config_.hiddenSystems);
 	if (std::find(tabs_.begin(), tabs_.end(), config_.tab) != tabs_.end()) return;
 	config_.tab = Tab::all();
 	configChanged_ = true;
@@ -205,6 +210,20 @@ void App::refreshTabs() {
 
 void App::switchTab(Tab tab, const std::string& currentPath) {
 	config_.tab = tab;
+	sound_ = Sound::Select;
+	configChanged_ = true;
+	rebuildView(currentPath, Missing::First);
+}
+
+void App::setFilter(Filter filter, const std::string& currentPath) {
+	config_.filter = filter;
+	sound_ = Sound::Select;
+	configChanged_ = true;
+	rebuildView(currentPath, Missing::First);
+}
+
+void App::setSort(SortKey sort, const std::string& currentPath) {
+	config_.sort = sort;
 	sound_ = Sound::Select;
 	configChanged_ = true;
 	rebuildView(currentPath, Missing::First);
@@ -221,6 +240,7 @@ void App::select(size_t cursor) {
 
 std::vector<MenuItem> App::menuItems() const {
 	std::vector<MenuItem> items(kMenuRows);
+	items[kFilterRow] = {"Show", filterLabel(config_.filter)};
 	items[kSortRow] = {"Sort by", sortKeyLabel(config_.sort)};
 	items[kViewRow] = {"View", config_.view == ViewMode::Grid ? "Grid" : "List"};
 	items[kThemeRow] = {"Theme", theme_->name};
@@ -264,13 +284,16 @@ void App::activateMenuRow(int row, int direction) {
 	const GameEntry* current = selected();
 	const std::string currentPath = current ? current->path : config_.selectedPath;
 	switch (row) {
-		case kSortRow: {
-			constexpr int kSortKeys = 3;
-			config_.sort = SortKey((int(config_.sort) + kSortKeys + direction) % kSortKeys);
+		case kFilterRow:
+			config_.filter = stepFilter(config_.filter, direction);
 			configChanged_ = true;
 			rebuildView(currentPath);
 			break;
-		}
+		case kSortRow:
+			config_.sort = stepSortKey(config_.sort, direction);
+			configChanged_ = true;
+			rebuildView(currentPath);
+			break;
 		case kViewRow:
 			config_.view = config_.view == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
 			configChanged_ = true;

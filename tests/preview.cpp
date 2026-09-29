@@ -86,11 +86,13 @@ int main(int argc, char** argv) {
 	app.handle(Action::NextTab);
 	app.handle(Action::NextTab);
 	shot(app, "4-gba");
-	app.handle(Action::ToggleView);
-	app.handle(Action::NextTab);
-	shot(app, "5-recent-list");
+	app.handle(Action::NextFilter); // Favorites
+	app.handle(Action::NextFilter); // Played
+	shot(app, "5-played");
 
-	app.handle(Action::ToggleView);
+	app.handle(Action::NextFilter);
+	app.handle(Action::NextFilter);
+	app.handle(Action::NextFilter); // back to All games
 	app.handle(Action::NextTab); // back to All
 	app.handle(Action::Search);
 	for (char c : std::string("MARIO")) {
