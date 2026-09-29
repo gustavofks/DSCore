@@ -51,9 +51,12 @@ std::vector<Tab> availableTabs(const std::vector<GameEntry>& games) {
 		if (int(game.system) < kSystemCount) present[int(game.system)] = true;
 	}
 	std::vector<Tab> tabs = {Tab::all(), Tab::favorites()};
+	std::vector<System> systems;
 	for (int i = 0; i < kSystemCount; ++i) {
-		if (present[i]) tabs.push_back(Tab::console(System(i)));
+		if (present[i]) systems.push_back(System(i));
 	}
+	std::sort(systems.begin(), systems.end(), [](System a, System b) { return displayOrder(a) < displayOrder(b); });
+	for (System system : systems) tabs.push_back(Tab::console(system));
 	tabs.push_back(Tab::recent());
 	return tabs;
 }
@@ -127,7 +130,7 @@ std::vector<size_t> libraryView(const std::vector<GameEntry>& games, const UserD
 		if (tab.kind == Tab::Kind::Recent) {
 			if (stats[a].lastPlayed != stats[b].lastPlayed) return stats[a].lastPlayed > stats[b].lastPlayed;
 		} else if (sort == SortKey::System) {
-			if (games[a].system != games[b].system) return games[a].system < games[b].system;
+			if (games[a].system != games[b].system) return displayOrder(games[a].system) < displayOrder(games[b].system);
 		} else if (sort == SortKey::MostPlayed) {
 			if (stats[a].timesPlayed != stats[b].timesPlayed) return stats[a].timesPlayed > stats[b].timesPlayed;
 		}

@@ -38,10 +38,13 @@ DATS = {  # system -> (thumbnail repository, No-Intro database file)
     "fds": ("Nintendo_-_Family_Computer_Disk_System", "no-intro/Nintendo%20-%20Family%20Computer%20Disk%20System.dat"),
     "sms": ("Sega_-_Master_System_-_Mark_III", "no-intro/Sega%20-%20Master%20System%20-%20Mark%20III.dat"),
     "gg": ("Sega_-_Game_Gear", "no-intro/Sega%20-%20Game%20Gear.dat"),
+    "snes": ("Nintendo_-_Super_Nintendo_Entertainment_System",
+             "no-intro/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System.dat"),
+    "a26": ("Atari_-_2600", "no-intro/Atari%20-%202600.dat"),
 }
 # The extensions DSCore recognizes (core/Systems.cpp), mapped to DATS keys.
 EXTENSIONS = {".nds": "nds", ".gba": "gba", ".gb": "gb", ".sgb": "gb", ".gbc": "gbc", ".nes": "nes", ".fds": "fds",
-              ".sms": "sms", ".gg": "gg"}
+              ".sms": "sms", ".gg": "gg", ".sfc": "snes", ".smc": "snes", ".a26": "a26"}
 DAT_MAX_AGE = 7 * 24 * 3600
 REGION_PREFERENCE = ["(USA", "(World", "(Europe"]
 # GameTDB region folder from the last letter of a DS game code.
@@ -236,12 +239,14 @@ def fetch_gba(path, titles):
 
 
 def crc32s(path):
-    """CRC32 of the file, plus of the data after the 16-byte header of an iNES file (No-Intro lists both)."""
+    """CRC32 of the file, plus without the 16-byte iNES header or a 512-byte SNES copier header."""
     with open(path, "rb") as f:
         data = f.read()
     crcs = [f"{zlib.crc32(data):08X}"]
     if data[:4] == b"NES\x1a":
         crcs.append(f"{zlib.crc32(data[16:]):08X}")
+    elif path.lower().endswith((".smc", ".sfc")) and len(data) % 1024 == 512:
+        crcs.append(f"{zlib.crc32(data[512:]):08X}")
     return crcs
 
 

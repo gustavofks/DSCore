@@ -16,7 +16,11 @@ constexpr SystemInfo kSystems[kSystemCount] = {
 	{"sms", "SMS", "Master System"},
 	{"gg", "GG", "Game Gear"},
 	{"md", "MD", "Mega Drive"},
+	{"a26", "2600", "Atari 2600"},
 };
+
+constexpr System kDisplayOrder[kSystemCount] = {System::Nds, System::Gba, System::Gb, System::Gbc, System::GameGear,
+	System::Nes, System::Snes, System::Sms, System::MegaDrive, System::Atari2600};
 
 struct Extension {
 	const char* ext;
@@ -27,6 +31,7 @@ struct Extension {
 constexpr Extension kExtensions[] = {
 	{".nds", System::Nds}, {".gba", System::Gba}, {".gb", System::Gb}, {".sgb", System::Gb}, {".gbc", System::Gbc},
 	{".nes", System::Nes}, {".fds", System::Nes}, {".sms", System::Sms}, {".gg", System::GameGear},
+	{".sfc", System::Snes}, {".smc", System::Snes}, {".a26", System::Atari2600},
 };
 
 } // namespace
@@ -43,6 +48,13 @@ bool systemForPath(std::string_view path, System& out) {
 
 const SystemInfo& systemInfo(System system) {
 	return kSystems[int(system) < kSystemCount ? int(system) : 0];
+}
+
+int displayOrder(System system) {
+	for (int i = 0; i < kSystemCount; ++i) {
+		if (kDisplayOrder[i] == system) return i;
+	}
+	return kSystemCount;
 }
 
 bool systemFromId(std::string_view id, System& out) {

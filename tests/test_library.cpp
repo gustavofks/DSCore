@@ -97,6 +97,10 @@ TEST_CASE("Only consoles with games get a tab, in system order") {
 	CHECK(availableTabs(games) == std::vector<Tab>{Tab::all(), Tab::favorites(), Tab::console(System::Nds),
 		Tab::console(System::Snes), Tab::recent()});
 	CHECK(availableTabs({}) == std::vector<Tab>{Tab::all(), Tab::favorites(), Tab::recent()});
+	games.push_back({"sd:/roms/A26/p.a26", "P", System::Atari2600, "", 0});
+	games.push_back({"sd:/roms/GB/t.gb", "T", System::Gb, "", 0});
+	CHECK(availableTabs(games) == std::vector<Tab>{Tab::all(), Tab::favorites(), Tab::console(System::Nds),
+		Tab::console(System::Gb), Tab::console(System::Snes), Tab::console(System::Atari2600), Tab::recent()});
 	UserData data;
 	CHECK(libraryView(games, data, Tab::console(System::Snes), SortKey::Name).size() == 2);
 }

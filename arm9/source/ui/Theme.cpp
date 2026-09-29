@@ -23,6 +23,7 @@ constexpr uint16_t kConsoleShades[kSystemCount][4] = {
 	{rgb(20, 11, 4), rgb(18, 12, 6), rgb(21, 13, 5), rgb(17, 10, 5)},  // Master System: amber
 	{rgb(6, 16, 11), rgb(5, 14, 12), rgb(7, 17, 10), rgb(6, 13, 10)},  // Game Gear: green
 	{rgb(6, 8, 16), rgb(7, 9, 14), rgb(5, 7, 15), rgb(8, 9, 17)},      // Mega Drive: navy
+	{rgb(16, 10, 5), rgb(14, 9, 6), rgb(17, 11, 7), rgb(13, 8, 4)},    // Atari 2600: wood
 };
 
 } // namespace
