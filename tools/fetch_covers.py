@@ -198,6 +198,10 @@ def fetch_thumbnail(system, names):
         # libretro-thumbnails replaces these characters in file names.
         safe = "".join("_" if c in '&*/:`<>?\\|"' else c for c in name)
         png = download(LIBRETRO_THUMBS.format(system=DATS[system][0], name=urllib.parse.quote(safe)))
+        # Revisions are often git symlinks, which raw.githubusercontent.com serves as the target's name.
+        if png and not png.startswith(b"\x89PNG") and len(png) < 256 and png.endswith(b".png"):
+            target = png.decode("utf-8", "replace")[:-4]
+            png = download(LIBRETRO_THUMBS.format(system=DATS[system][0], name=urllib.parse.quote(target)))
         if png:
             return png
     return None
@@ -215,8 +219,9 @@ def fetch_ds(path, titles):
 
 
 def strip_tags(stem):
-    while stem.endswith(")") and "(" in stem:
-        stem = stem[:stem.rfind("(")].rstrip()
+    """Drops trailing (...) and [...] tags, like DSCore's titleFromFileName."""
+    while stem[-1:] in (")", "]") and ("(" if stem[-1] == ")" else "[") in stem:
+        stem = stem[:stem.rfind("(" if stem[-1] == ")" else "[")].rstrip()
     return stem
 
 
@@ -240,9 +245,15 @@ def crc32s(path):
     return crcs
 
 
+def same_title(path, titles):
+    """No-Intro names whose title without tags equals the file's (e.g. for bad or hacked dumps)."""
+    base = strip_tags(os.path.splitext(os.path.basename(path))[0]).lower()
+    return sorted({n for names in titles.values() for n in names if strip_tags(n).lower() == base}, key=rank)
+
+
 def fetch_by_crc(path, system, titles):
     names = [name for crc in crc32s(path) for name in titles.get(crc, [])]
-    return fetch_thumbnail(system, names + name_guesses(path))
+    return fetch_thumbnail(system, names + name_guesses(path) + same_title(path, titles))
 
 
 # --- Main -----------------------------------------------------------------------------------------
