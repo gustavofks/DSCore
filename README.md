@@ -12,11 +12,19 @@ removed.
 
 - Library of games found anywhere under `sd:/roms`, recognized by extension: DS (`.nds`), GBA
   (`.gba`), Game Boy (`.gb`, `.sgb`), Game Boy Color (`.gbc`), NES (`.nes`, `.fds`), Master System
-  (`.sms`), Game Gear (`.gg`), Super Nintendo (`.sfc`, `.smc`) and Atari 2600 (`.a26`). DS games show their banner icon and title; the others get a
-  generated tile and the file name as title. Games of the other consoles run in the emulators
-  TWiLight Menu++ ships in `sd:/_nds/TWiLightMenu/emulators`.
-- Box art on the details screen, downloaded on a PC with `tools/fetch_covers.py`.
-- Grid or list view, tabs (All, Favorites, one per console with at least one game, Recent) and sorting by name, system or play count.
+  (`.sms`), Game Gear (`.gg`), Super Nintendo (`.sfc`, `.smc`) and Atari 2600 (`.a26`). Games of the
+  other consoles run in the emulators TWiLight Menu++ ships in `sd:/_nds/TWiLightMenu/emulators`.
+- Clean titles: the full DS banner title and publisher, or the file name without region tags,
+  release numbers and site names.
+- Box art on the details screen and as thumbnails in the grid, downloaded on a PC with
+  `tools/fetch_covers.py`.
+- Details screen with region, languages, size, play history and badges for Portuguese games,
+  favorites and games with a save file.
+- Tabs for all games and for each console with at least one game (consoles can be hidden), filters
+  (all, favorites, played, not played, Portuguese) and sorting by name, recent, play count or
+  system, in a grid or a list.
+- Portuguese games are recognized by tags such as `(BR)`, `(PT)` or `(En,Pt)` in the file name, or a
+  folder named `br`, and marked with a green "BR" badge.
 - Search by name with an on-screen keyboard.
 - Favorites and play history, seeded from TWiLight Menu++'s history on the first run.
 - Themes: four built in, plus your own color themes as INI files.
@@ -32,9 +40,9 @@ removed.
 | Y | Add to / remove from favorites |
 | B | Clear the search |
 | L / R | Previous / next tab |
-| START | Options: sort order, view, theme, rebuild library |
-| SELECT | Switch between grid and list |
-| Touch | Tap a game to select it, tap it again to play; tap a tab to open it |
+| SELECT | Next filter |
+| START | Options: filter, sort order, view, grid art, theme, sounds, consoles, random game, rebuild library |
+| Touch | Tap a game to select it, tap it again to play; tap a tab to open it; tap the filter or the sort order at the bottom to change it |
 | Power button | Return to the system menu |
 
 While searching, the D-pad and A (or touch) type on the keyboard, B deletes and START finishes.
@@ -96,8 +104,9 @@ them, and `-Data` to delete DSCore's own files in `sd:/_nds/DSCore`.
 |---|---|
 | `sd:/_nds/DSCore/library.bin` | Library cache (safe to delete; rebuilt on the next start) |
 | `sd:/_nds/DSCore/userdata.ini` | Favorites and play history |
-| `sd:/_nds/DSCore/config.ini` | Last tab, sort order, view, theme and selected game |
+| `sd:/_nds/DSCore/config.ini` | Last tab, filter, sort order, view, theme, hidden consoles and selected game |
 | `sd:/_nds/DSCore/covers/` | Box art from `tools/fetch_covers.py` |
+| `sd:/_nds/DSCore/thumbs.bin` | Grid thumbnails of the box art, rebuilt by every run of `tools/fetch_covers.py` |
 | `sd:/_nds/DSCore/themes/` | Your themes |
 | `sd:/_nds/DSCore/log.txt` | Timings of the last start |
 
