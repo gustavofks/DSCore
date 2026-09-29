@@ -56,11 +56,11 @@ TEST_CASE("App switches tabs and keeps the selection when it is listed") {
 	config.selectedPath = "sd:/roms/GBA/101.gba";
 	App app(lib, data, config);
 	app.handle(Action::NextTab); // Favorites: empty
-	CHECK(config.tab == Tab::Favorites);
+	CHECK(config.tab == Tab::favorites());
 	CHECK(app.selected() == nullptr);
 	app.handle(Action::NextTab); // DS
 	app.handle(Action::NextTab); // GBA
-	CHECK(config.tab == Tab::Gba);
+	CHECK(config.tab == Tab::console(System::Gba));
 	app.handle(Action::PrevTab);
 	app.handle(Action::NextTab);
 	CHECK(app.selected()->system == System::Gba);
@@ -88,7 +88,7 @@ TEST_CASE("App toggles favorites and reports user data changes") {
 	CHECK(data.find("sd:/roms/NDS/100.nds")->favorite);
 	CHECK(app.takeUserDataChanged());
 
-	config.tab = Tab::Favorites;
+	config.tab = Tab::favorites();
 	App favorites(lib, data, config);
 	favorites.handle(Action::Favorite);
 	CHECK(favorites.selected() == nullptr); // un-favorited game leaves the tab
@@ -207,9 +207,10 @@ TEST_CASE("App touch selects a cell, then launches it, and switches tabs") {
 	CHECK(app.selected()->path == "sd:/roms/NDS/101.nds");
 	CHECK(app.handle(Action::Tap, cell.x + 5, cell.y + 5) == "sd:/roms/NDS/101.nds");
 
-	const Rect gbaTab = layout::tabRect(int(Tab::Gba));
+	const std::vector<Tab> tabs = {Tab::all(), Tab::favorites(), Tab::console(System::Nds), Tab::console(System::Gba), Tab::recent()};
+	const Rect gbaTab = tabBarRects(tabs, config.tab)[3];
 	app.handle(Action::Tap, gbaTab.x + 2, gbaTab.y + 2);
-	CHECK(config.tab == Tab::Gba);
+	CHECK(config.tab == Tab::console(System::Gba));
 	CHECK(app.selected()->system == System::Gba);
 }
 
@@ -346,4 +347,19 @@ TEST_CASE("App search: B deletes, then leaves; the D-pad moves between keys") {
 	app.handle(Action::Back); // nothing left to delete: leaves the keyboard
 	CHECK_FALSE(app.searching());
 	CHECK(app.query().empty());
+}
+
+TEST_CASE("App hides tabs of consoles without games and forgets a saved tab that disappeared") {
+	const LibraryData lib = library(2, 0);
+	UserData data;
+	Config config;
+	config.tab = Tab::console(System::Gba);
+	App app(lib, data, config);
+	CHECK(config.tab == Tab::all());
+	CHECK(app.takeConfigChanged());
+	app.handle(Action::NextTab); // Favorites
+	app.handle(Action::NextTab); // DS
+	CHECK(config.tab == Tab::console(System::Nds));
+	app.handle(Action::NextTab); // no GBA games: Recent
+	CHECK(config.tab == Tab::recent());
 }

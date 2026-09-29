@@ -5,6 +5,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/Systems.h"
 #include "gfx/Canvas.h"
 
 namespace dscore {
@@ -23,6 +24,10 @@ struct Theme {
 	uint16_t ndsShades[4]; // generated tiles pick one shade per game so neighbours differ
 	uint16_t gbaShades[4];
 };
+
+// Four shades for generated tiles of system's games: the theme's own for DS and GBA, fixed mid-tones
+// (readable on any background) for the other consoles.
+const uint16_t* tileShades(const Theme& theme, System system);
 
 // The first one is the default.
 const std::vector<Theme>& builtInThemes();

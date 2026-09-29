@@ -13,5 +13,5 @@ With the SD card in a Windows PC (E:\ below):
 Without the scripts: rename sd:/_nds/TWiLightMenu/dsimenu.srldr to dsimenu.srldr.dscore-orig, copy
 dscore.nds there as dsimenu.srldr, and copy themes\*.ini to sd:/_nds/DSCore/themes/.
 
-Games go in sd:/roms/NDS and sd:/roms/GBA. Updating TWiLight Menu++ replaces dsimenu.srldr: install
+Games go anywhere under sd:/roms (e.g. sd:/roms/NDS, sd:/roms/GBA, sd:/roms/GB). Updating TWiLight Menu++ replaces dsimenu.srldr: install
 DSCore again afterwards. See README.md for controls, themes and details.

@@ -68,12 +68,15 @@ private:
 	enum class Missing { First, Clamp }; // where the cursor goes when the kept game is not listed
 	void rebuildView(const std::string& keepPath, Missing missing = Missing::Clamp);
 	void select(size_t cursor);
+	void refreshTabs();
+	void switchTab(Tab tab, const std::string& currentPath);
 	std::string activate(size_t index);
 
 	const LibraryData& library_;
 	UserData& userData_;
 	Config& config_;
 	const Theme* theme_ = &builtInThemes()[0];
+	std::vector<Tab> tabs_; // tab bar for the current library
 	std::vector<size_t> view_;
 	mutable IconCache icons_; // drawing is const but warms the cache
 	enum MenuRow { kSortRow, kViewRow, kThemeRow, kSoundRow, kRebuildRow, kCloseRow, kMenuRows };

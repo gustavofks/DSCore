@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "core/LibraryScan.h"
+#include "core/Systems.h"
 
 using namespace dscore;
 
@@ -14,7 +15,7 @@ namespace {
 bool fakeParse(const std::string& path, GameEntry& game, std::optional<NdsIcon>& icon) {
 	if (path.find("broken") != std::string::npos) return false;
 	game.title = path.substr(path.find_last_of('/') + 1);
-	game.system = romKindFor(path) == RomKind::Gba ? System::Gba : System::Nds;
+	systemForPath(path, game.system);
 	if (game.system == System::Nds && path.find("noicon") == std::string::npos) {
 		icon.emplace();
 		icon->bitmap[0] = uint8_t(path.size());

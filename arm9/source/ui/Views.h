@@ -25,10 +25,14 @@ struct BrowserState {
 	std::string_view query;                     // active search filter, empty when none
 	const std::vector<size_t>* view = nullptr; // indexes into library->games for the current tab
 	size_t cursor = 0;                          // position in view
-	Tab tab = Tab::All;
+	const std::vector<Tab>* tabs = nullptr;    // the tab bar, left to right
+	Tab tab = Tab::all();
 	SortKey sort = SortKey::Name;
 	ViewMode mode = ViewMode::Grid;
 };
+
+// Where each of tabs lies on the tab bar while active is selected (see layout::tabRects).
+std::vector<Rect> tabBarRects(const std::vector<Tab>& tabs, Tab active);
 
 // The game's banner icon, or a tile in the system color with the title's initials, drawn as a square of
 // size pixels: 16 (half size), 32 or any multiple of 32.

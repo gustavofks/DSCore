@@ -3,13 +3,14 @@
 
 Usage: python tools/fetch_covers.py <sd-root> [--twilight] [--force]
 
-  <sd-root>   SD card root (e.g. E:\\) or a copy of it; games are read from roms/NDS and roms/GBA.
+  <sd-root>   SD card root (e.g. E:\\) or a copy of it; games are read from everywhere under roms/.
   --twilight  Also save the original PNGs where TWiLight Menu++ looks for box art.
   --force     Download again covers that already exist.
 
 DS covers come from GameTDB by game code. When GameTDB has none, and for GBA games, the game code read
 from the ROM is looked up in libretro-database's No-Intro data to get the exact title that
-libretro-thumbnails uses; the file name is the last resort.
+libretro-thumbnails uses. Games of the other consoles have no game code: their CRC32 is looked up
+instead. The file name is the last resort.
 Each cover is scaled to fit 112x112 and written to _nds/DSCore/covers/<rom file name>.bin in DSCore's
 format: "DSCV", width and height (u16 LE), then width*height DS colors (u16 LE, bit 15 set).
 Only the Python standard library is used.
@@ -28,16 +29,25 @@ MAX_SIZE = 112
 GAMETDB = "https://art.gametdb.com/ds/coverS/{region}/{code}.png"
 LIBRETRO_THUMBS = "https://raw.githubusercontent.com/libretro-thumbnails/{system}/master/Named_Boxarts/{name}.png"
 LIBRETRO_DB = "https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/"
-DATS = {  # system -> (thumbnail repository, database file with game codes)
+DATS = {  # system -> (thumbnail repository, No-Intro database file)
     "nds": ("Nintendo_-_Nintendo_DS", "no-intro/Nintendo%20-%20Nintendo%20DS.dat"),
     "gba": ("Nintendo_-_Game_Boy_Advance", "no-intro/Nintendo%20-%20Game%20Boy%20Advance.dat"),
+    "gb": ("Nintendo_-_Game_Boy", "no-intro/Nintendo%20-%20Game%20Boy.dat"),
+    "gbc": ("Nintendo_-_Game_Boy_Color", "no-intro/Nintendo%20-%20Game%20Boy%20Color.dat"),
+    "nes": ("Nintendo_-_Nintendo_Entertainment_System", "no-intro/Nintendo%20-%20Nintendo%20Entertainment%20System.dat"),
+    "fds": ("Nintendo_-_Family_Computer_Disk_System", "no-intro/Nintendo%20-%20Family%20Computer%20Disk%20System.dat"),
+    "sms": ("Sega_-_Master_System_-_Mark_III", "no-intro/Sega%20-%20Master%20System%20-%20Mark%20III.dat"),
+    "gg": ("Sega_-_Game_Gear", "no-intro/Sega%20-%20Game%20Gear.dat"),
 }
+# The extensions DSCore recognizes (core/Systems.cpp), mapped to DATS keys.
+EXTENSIONS = {".nds": "nds", ".gba": "gba", ".gb": "gb", ".sgb": "gb", ".gbc": "gbc", ".nes": "nes", ".fds": "fds",
+              ".sms": "sms", ".gg": "gg"}
 DAT_MAX_AGE = 7 * 24 * 3600
 REGION_PREFERENCE = ["(USA", "(World", "(Europe"]
 # GameTDB region folder from the last letter of a DS game code.
 REGIONS = {"E": ["US"], "P": ["EN", "US"], "J": ["JA"], "K": ["KO"], "F": ["FR", "EN"], "D": ["DE", "EN"],
            "S": ["ES", "EN"], "I": ["IT", "EN"], "H": ["NL", "EN"], "U": ["AU", "EN"], "O": ["US", "EN"]}
-GBA_REGION_SUFFIXES = ["", " (USA)", " (USA, Europe)", " (Europe)", " (World)", " (Japan)"]
+REGION_SUFFIXES = ["", " (USA)", " (USA, Europe)", " (Europe)", " (World)", " (Japan)"]
 
 
 # --- PNG decoding (8-bit, non-interlaced; gray, RGB, palette, gray+alpha, RGBA) -------------------
@@ -150,8 +160,8 @@ def game_code(path, offset):
     return code if code.isalnum() and len(code) == 4 else None
 
 
-def load_titles(system):
-    """Game code -> No-Intro titles (best region first), from libretro-database, cached for a week."""
+def load_dat(system):
+    """The system's No-Intro DAT from libretro-database, cached for a week; empty when unavailable."""
     cache = os.path.join(tempfile.gettempdir(), f"dscore-{system}.dat")
     if not os.path.exists(cache) or time.time() - os.path.getmtime(cache) > DAT_MAX_AGE:
         data = download(LIBRETRO_DB + DATS[system][1])
@@ -159,19 +169,28 @@ def load_titles(system):
             with open(cache, "wb") as f:
                 f.write(data)
     if not os.path.exists(cache):
-        return {}
-    text = open(cache, encoding="utf-8", errors="replace").read()
+        return ""
+    return open(cache, encoding="utf-8", errors="replace").read()
+
+
+def rank(title):
+    return next((i for i, region in enumerate(REGION_PREFERENCE) if region in title), len(REGION_PREFERENCE))
+
+
+def load_titles(system):
+    """Key -> No-Intro titles (best region first): game codes for DS and GBA, CRC32s otherwise."""
     titles = {}
-    for block in text.split("\ngame (")[1:]:
+    for block in load_dat(system).split("\ngame (")[1:]:
         name = re.search(r'^\s*(?:name|comment) "([^"]+)"', block, re.M)
-        serial = re.search(r'^\s*serial "(?:AGB-)?([0-9A-Z]{4})', block, re.M)
-        if name and serial:
-            titles.setdefault(serial.group(1), []).append(name.group(1))
-
-    def rank(title):
-        return next((i for i, region in enumerate(REGION_PREFERENCE) if region in title), len(REGION_PREFERENCE))
-
-    return {code: sorted(names, key=rank) for code, names in titles.items()}
+        if not name:
+            continue
+        if system in ("nds", "gba"):
+            keys = re.findall(r'^\s*serial "(?:AGB-)?([0-9A-Z]{4})', block, re.M)
+        else:
+            keys = re.findall(r'\bcrc ([0-9A-Fa-f]{8})', block)
+        for key in keys:
+            titles.setdefault(key.upper(), []).append(name.group(1))
+    return {key: sorted(names, key=rank) for key, names in titles.items()}
 
 
 def fetch_thumbnail(system, names):
@@ -179,6 +198,10 @@ def fetch_thumbnail(system, names):
         # libretro-thumbnails replaces these characters in file names.
         safe = "".join("_" if c in '&*/:`<>?\\|"' else c for c in name)
         png = download(LIBRETRO_THUMBS.format(system=DATS[system][0], name=urllib.parse.quote(safe)))
+        # Revisions are often git symlinks, which raw.githubusercontent.com serves as the target's name.
+        if png and not png.startswith(b"\x89PNG") and len(png) < 256 and png.endswith(b".png"):
+            target = png.decode("utf-8", "replace")[:-4]
+            png = download(LIBRETRO_THUMBS.format(system=DATS[system][0], name=urllib.parse.quote(target)))
         if png:
             return png
     return None
@@ -196,26 +219,51 @@ def fetch_ds(path, titles):
 
 
 def strip_tags(stem):
-    while stem.endswith(")") and "(" in stem:
-        stem = stem[:stem.rfind("(")].rstrip()
+    """Drops trailing (...) and [...] tags, like DSCore's titleFromFileName."""
+    while stem[-1:] in (")", "]") and ("(" if stem[-1] == ")" else "[") in stem:
+        stem = stem[:stem.rfind("(" if stem[-1] == ")" else "[")].rstrip()
     return stem
+
+
+def name_guesses(path):
+    stem = os.path.splitext(os.path.basename(path))[0]
+    return [stem] + [strip_tags(stem) + suffix for suffix in REGION_SUFFIXES]
 
 
 def fetch_gba(path, titles):
     code = game_code(path, 0xAC)
-    stem = os.path.splitext(os.path.basename(path))[0]
-    names = titles.get(code, []) + [stem] + [strip_tags(stem) + suffix for suffix in GBA_REGION_SUFFIXES]
-    return fetch_thumbnail("gba", names)
+    return fetch_thumbnail("gba", titles.get(code, []) + name_guesses(path))
+
+
+def crc32s(path):
+    """CRC32 of the file, plus of the data after the 16-byte header of an iNES file (No-Intro lists both)."""
+    with open(path, "rb") as f:
+        data = f.read()
+    crcs = [f"{zlib.crc32(data):08X}"]
+    if data[:4] == b"NES\x1a":
+        crcs.append(f"{zlib.crc32(data[16:]):08X}")
+    return crcs
+
+
+def same_title(path, titles):
+    """No-Intro names whose title without tags equals the file's (e.g. for bad or hacked dumps)."""
+    base = strip_tags(os.path.splitext(os.path.basename(path))[0]).lower()
+    return sorted({n for names in titles.values() for n in names if strip_tags(n).lower() == base}, key=rank)
+
+
+def fetch_by_crc(path, system, titles):
+    names = [name for crc in crc32s(path) for name in titles.get(crc, [])]
+    return fetch_thumbnail(system, names + name_guesses(path) + same_title(path, titles))
 
 
 # --- Main -----------------------------------------------------------------------------------------
 
 def list_roms(sd_root):
-    for folder, ext in (("roms/NDS", ".nds"), ("roms/GBA", ".gba")):
-        for root, _, files in os.walk(os.path.join(sd_root, folder)):
-            for name in sorted(files):
-                if name.lower().endswith(ext) and not name.startswith("."):
-                    yield os.path.join(root, name), ext
+    for root, _, files in os.walk(os.path.join(sd_root, "roms")):
+        for name in sorted(files):
+            system = EXTENSIONS.get(os.path.splitext(name)[1].lower())
+            if system and not name.startswith("."):
+                yield os.path.join(root, name), system
 
 
 def main():
@@ -230,21 +278,24 @@ def main():
     if save_twilight:
         os.makedirs(boxart_dir, exist_ok=True)
 
-    titles = {system: load_titles(system) for system in DATS}
+    roms = list(list_roms(sd_root))
+    titles = {system: load_titles(system) for system in sorted({system for _, system in roms})}
     found = skipped = 0
     missing = []
-    roms = list(list_roms(sd_root))
-    for i, (path, ext) in enumerate(roms, 1):
+    for i, (path, system) in enumerate(roms, 1):
         name = os.path.basename(path)
         target = os.path.join(covers_dir, name + ".bin")
         if os.path.exists(target) and not force:
             skipped += 1
             continue
-        if ext == ".nds":
+        twilight_name = name + ".png"
+        if system == "nds":
             png, code = fetch_ds(path, titles["nds"])
             twilight_name = (code or name) + ".png"
+        elif system == "gba":
+            png = fetch_gba(path, titles["gba"])
         else:
-            png, twilight_name = fetch_gba(path, titles["gba"]), name + ".png"
+            png = fetch_by_crc(path, system, titles[system])
         if not png:
             missing.append(name)
             print(f"[{i}/{len(roms)}] no cover: {name}")

@@ -6,17 +6,15 @@
 #include <vector>
 
 #include "core/IniPatch.h"
+#include "core/Systems.h"
 
 namespace dscore {
 
-enum class RomKind { Nds, Gba, Unsupported };
-
-RomKind romKindFor(std::string_view path);
-
 // [SRLOADER] keys (settings.ini) that make TWiLight Menu++'s main.srldr relaunch romPath from the SD
 // card (see lastRunROM() in title/arm9/source/main.cpp): the same per-launch keys TWiLight's ROM
-// browser writes. homebrew selects nds-bootstrap-hb for DS files and is ignored for GBA, which always
-// relaunches through nds-bootstrap-hb. Empty for unsupported files.
+// browser writes. homebrew selects nds-bootstrap-hb for DS files and is ignored otherwise: GBA always
+// relaunches through nds-bootstrap-hb, other consoles boot their emulator with the ROM as argument.
+// Empty for unsupported files.
 std::vector<IniKey> relaunchKeys(std::string_view romPath, bool homebrew);
 
 // [NDS-BOOTSTRAP] keys (nds-bootstrap.ini) the relaunch needs besides settings.ini. TWiLight writes
@@ -24,6 +22,10 @@ std::vector<IniKey> relaunchKeys(std::string_view romPath, bool homebrew);
 // reuses them: nds-bootstrap-hb boots GBARunner2 with the ROM (as a "fat:" path) as argument.
 // Empty for DS games.
 std::vector<IniKey> bootstrapKeys(std::string_view romPath);
+
+// The TWiLight Menu++ emulator main.srldr boots for system's games in DSi mode, or nullptr for DS and
+// GBA games, which go through nds-bootstrap.
+const char* twilightEmulator(System system);
 
 // main.srldr only honours the auto-run bit at 0x02000000 when 0x02000004 holds its warm-relaunch
 // marker; otherwise it treats the boot as cold and clears the bits. Older releases (v25.10.0) expect 0,

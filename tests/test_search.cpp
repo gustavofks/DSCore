@@ -24,9 +24,9 @@ TEST_CASE("libraryView keeps only games matching the query") {
 		{"sd:/roms/NDS/c.nds", "Zelda", System::Nds, "", 0, -1},
 	};
 	const UserData data;
-	CHECK(libraryView(games, data, Tab::All, SortKey::Name, "mario").size() == 2);
-	CHECK(libraryView(games, data, Tab::Nds, SortKey::Name, "mario").size() == 1);
-	CHECK(libraryView(games, data, Tab::All, SortKey::Name, "").size() == 3);
+	CHECK(libraryView(games, data, Tab::all(), SortKey::Name, "mario").size() == 2);
+	CHECK(libraryView(games, data, Tab::console(System::Nds), SortKey::Name, "mario").size() == 1);
+	CHECK(libraryView(games, data, Tab::all(), SortKey::Name, "").size() == 3);
 }
 
 TEST_CASE("keyboard types characters, spaces and deletes") {

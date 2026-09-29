@@ -35,6 +35,21 @@ bool isMinorWord(std::string_view word) {
 	return lower == "the" || lower == "a" || lower == "an" || lower == "of";
 }
 
+// No-Intro moves a leading article behind the main title ("Legend of Zelda, The - Link's Awakening");
+// put it back in front.
+std::string articleFirst(const std::string& title) {
+	const size_t dash = title.find(" - ");
+	const std::string main = title.substr(0, dash);
+	for (const char* article : {"The", "A", "An"}) {
+		const std::string suffix = std::string(", ") + article;
+		if (main.size() > suffix.size() && main.compare(main.size() - suffix.size(), suffix.size(), suffix) == 0) {
+			const std::string rest = dash == std::string::npos ? std::string() : title.substr(dash);
+			return article + (" " + main.substr(0, main.size() - suffix.size())) + rest;
+		}
+	}
+	return title;
+}
+
 } // namespace
 
 bool readNdsIcon(const uint8_t* banner, size_t len, NdsIcon& out) {
@@ -83,7 +98,7 @@ std::string titleFromFileName(std::string_view path) {
 		stripped = stripped.substr(0, open);
 	}
 	const std::string title = trimSpaces(stripped);
-	return title.empty() ? trimSpaces(name) : title;
+	return title.empty() ? trimSpaces(name) : articleFirst(title);
 }
 
 std::string initialsFor(std::string_view title) {
