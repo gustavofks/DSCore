@@ -5,11 +5,13 @@
 #include <vector>
 
 #include "common/systemdetails.h"
+#include "core/LaunchKeys.h"
 #include "core/LibraryScan.h"
 #include "core/Version.h"
 #include "launch/TwilightLauncher.h"
 #include "my_gurumeditation.h"
 #include "platform/Effects.h"
+#include "platform/FileIo.h"
 #include "platform/Power.h"
 #include "platform/RomFiles.h"
 #include "platform/Screens.h"
@@ -122,8 +124,8 @@ std::string handleInput(App& app) {
 	return launch;
 }
 
-// Loads the selected game's box art after the cursor has rested for a few frames, remembering games
-// that have none so their file is not looked up again.
+// Loads the selected game's box art and looks for its save after the cursor has rested for a few frames,
+// remembering games that have no box art so their file is not looked up again.
 class CoverLoader {
 public:
 	void update(App& app) {
@@ -136,6 +138,9 @@ public:
 		}
 		if (path.empty() || path == loaded_ || ++restingFrames_ < kCoverDelayFrames) return;
 		loaded_ = path;
+		bool hasSave = false;
+		for (const std::string& save : saveFileCandidates(path)) hasSave = hasSave || fileExists(save);
+		app.setHasSave(path, hasSave);
 		std::optional<Cover> cover;
 		if (!missing_.count(path)) {
 			cover = storage::loadCover(path);

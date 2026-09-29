@@ -5,6 +5,7 @@
 #include "core/RomMedia.h"
 #include "core/Version.h"
 #include "core/Text.h"
+#include "core/Titles.h"
 #include "ui/Keyboard.h"
 #include "ui/Layout.h"
 #include "ui/Navigation.h"
@@ -19,6 +20,9 @@ constexpr int kHeaderH = 16;
 constexpr int kHintBarY = kScreenH - kFooterH;
 constexpr uint32_t kFirstRtcTime = 1000000000; // below this, lastPlayed is an imported rank, not a date
 constexpr uint16_t kTileText = rgb(31, 31, 31); // generated tiles use mid-tone colors in every theme
+// Portuguese badge in the colors of the Brazilian flag, the same in every theme.
+constexpr uint16_t kBadgeGreen = rgb(0, 15, 6);
+constexpr uint16_t kBadgeYellow = rgb(31, 28, 2);
 
 // 9x9 star, bit 8 = leftmost pixel.
 constexpr uint16_t kStar[9] = {0x010, 0x010, 0x038, 0x1FF, 0x0FE, 0x07C, 0x06C, 0x0C6, 0x082};
@@ -42,6 +46,14 @@ void drawStar(Canvas& canvas, int x, int y, uint16_t color) {
 			if (kStar[row] & (0x100 >> col)) canvas.fillRect({x + col, y + row, 1, 1}, color);
 		}
 	}
+}
+
+// Small-font label on a filled box at (x, y); returns the x just past it.
+int drawBadge(Canvas& canvas, int x, int y, const std::string& text, uint16_t background, uint16_t color) {
+	const int w = textWidth(smallFont(), text) + 6;
+	canvas.fillRect({x, y, w, smallFont().height + 1}, background);
+	canvas.drawText(smallFont(), x + 3, y + 1, text, color);
+	return x + w;
 }
 
 void drawCentered(Canvas& canvas, const Font& font, const Rect& r, const std::string& text, uint16_t color) {
@@ -90,6 +102,15 @@ void drawTabs(Canvas& canvas, const Theme& theme, const std::vector<Tab>& tabs, 
 		canvas.fillRect({r.x + 1, r.y, r.w - 2, r.h}, on ? theme.accent : theme.surface);
 		drawCentered(canvas, smallFont(), r, tabLabel(tabs[i]), on ? theme.text : theme.muted);
 	}
+	// Arrows over the edges tell that more tabs are one L/R away.
+	if (!rects.empty() && rects.front().x < 0) {
+		canvas.fillRect({0, 0, 9, kTabBarH}, theme.background);
+		drawArrow(canvas, 2, kTabBarH / 2 - 2, -2, theme.accent);
+	}
+	if (!rects.empty() && rects.back().x + rects.back().w > kScreenW) {
+		canvas.fillRect({kScreenW - 9, 0, 9, kTabBarH}, theme.background);
+		drawArrow(canvas, kScreenW - 6, kTabBarH / 2 - 2, 2, theme.accent);
+	}
 }
 
 void drawFooter(Canvas& canvas, const BrowserState& state) {
@@ -121,6 +142,7 @@ void drawGridCell(Canvas& canvas, const BrowserState& state, size_t index) {
 	drawGameTile(canvas, theme, *state.library, *state.icons, game, cell.x + (cell.w - kIconSize) / 2,
 		cell.y + (cell.h - kIconSize) / 2, kIconSize);
 	if (isFavorite(state, game)) drawStar(canvas, cell.x + cell.w - 13, cell.y + 4, theme.favorite);
+	if (game.portuguese) drawBadge(canvas, cell.x + 3, cell.y + cell.h - smallFont().height - 4, "BR", kBadgeGreen, kBadgeYellow);
 }
 
 void drawListRow(Canvas& canvas, const BrowserState& state, size_t index) {
@@ -132,10 +154,15 @@ void drawListRow(Canvas& canvas, const BrowserState& state, size_t index) {
 	if (selected) canvas.fillRect({r.x, r.y, 3, r.h}, theme.accent);
 	drawGameTile(canvas, theme, *state.library, *state.icons, game, 6, r.y, 16);
 	const bool favorite = isFavorite(state, game);
-	const int textW = kScreenW - 28 - (favorite ? 14 : 4);
+	const int badgeW = game.portuguese ? textWidth(smallFont(), "BR") + 10 : 0;
+	const int textW = kScreenW - 28 - (favorite ? 14 : 4) - badgeW;
 	canvas.drawText(smallFont(), 28, r.y + (r.h - smallFont().height) / 2, ellipsize(smallFont(), game.title, textW),
 		selected ? theme.text : theme.muted);
 	if (favorite) drawStar(canvas, kScreenW - 12, r.y + 3, theme.favorite);
+	if (game.portuguese) {
+		drawBadge(canvas, kScreenW - (favorite ? 14 : 4) - badgeW + 2, r.y + (r.h - smallFont().height - 1) / 2, "BR",
+			kBadgeGreen, kBadgeYellow);
+	}
 }
 
 } // namespace
@@ -179,15 +206,16 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 	canvas.fill(theme.background);
 	canvas.fillRect({0, 0, kScreenW, kHeaderH}, theme.surface);
 	const int headerY = (kHeaderH - smallFont().height) / 2;
-	const std::string title = state.query.empty() ? "DSCore" : "Search: " + std::string(state.query);
-	canvas.drawText(smallFont(), 4, headerY, ellipsize(smallFont(), title, kScreenW / 2), theme.accent);
+	// Where the list comes from: tab and filter, or the search.
+	std::string where = state.tab.kind == Tab::Kind::All ? "All games" : systemInfo(state.tab.system).name;
+	if (state.filter != Filter::All) where += std::string(" \xC2\xB7 ") + filterLabel(state.filter);
+	if (!state.query.empty()) where = "Search: " + std::string(state.query);
 	const GameEntry* game = selectedGame(state);
-	if (game) {
-		const std::string position = std::to_string(state.cursor + 1) + "/" + std::to_string(state.view->size());
-		const int positionX = kScreenW - 4 - textWidth(smallFont(), position);
-		canvas.drawText(smallFont(), positionX, headerY, position, theme.muted);
-		if (isFavorite(state, *game)) drawStar(canvas, positionX - 14, (kHeaderH - 9) / 2, theme.favorite);
-	}
+	const std::string position =
+		game ? std::to_string(state.cursor + 1) + "/" + std::to_string(state.view->size()) : std::string();
+	const int positionX = kScreenW - 4 - textWidth(smallFont(), position);
+	canvas.drawText(smallFont(), 4, headerY, ellipsize(smallFont(), where, positionX - 12), theme.accent);
+	canvas.drawText(smallFont(), positionX, headerY, position, theme.muted);
 
 	if (!game) {
 		const Rect middle = {0, kHeaderH, kScreenW, kHintBarY - kHeaderH};
@@ -196,7 +224,7 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 			state.filter != Filter::All ? "SELECT changes the filter"
 			: state.tab.kind == Tab::Kind::All ? "Add ROMs under sd:/roms" : "Press L/R to change tab", theme.muted);
 	} else {
-		const Rect art = {8, 24, 112, 112};
+		const Rect art = {8, kHeaderH + 6, 112, 112};
 		canvas.fillRect(art, theme.surface);
 		if (state.cover) {
 			canvas.blit(state.cover->pixels.data(), state.cover->width, state.cover->height,
@@ -205,31 +233,55 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 			drawGameTile(canvas, theme, *state.library, *state.icons, *game, art.x + 8, art.y + 8, 96);
 		}
 
-		const int textX = 126;
-		const int textW = kScreenW - textX - 8;
-		int y = 30;
-		for (const std::string& line : wrapText(largeFont(), game->title, textW, 3)) {
-			canvas.drawText(largeFont(), textX, y, line, theme.text);
-			y += largeFont().height + 2;
+		// Title in the large font when it fits three lines, otherwise in the small one.
+		const int textX = art.x + art.w + 8;
+		const int textW = kScreenW - textX - 6;
+		const bool large = wrapText(largeFont(), game->title, textW, 4).size() <= 3;
+		const Font& titleFont = large ? largeFont() : smallFont();
+		int y = art.y + 2;
+		for (const std::string& line : wrapText(titleFont, game->title, textW, large ? 3 : 5)) {
+			canvas.drawText(titleFont, textX, y, line, theme.text);
+			y += titleFont.height + (large ? 1 : 2);
 		}
-		y += 6;
+		if (!game->publisher.empty()) {
+			y += 2;
+			for (const std::string& line : wrapText(smallFont(), game->publisher, textW, 2)) {
+				canvas.drawText(smallFont(), textX, y, line, theme.muted);
+				y += smallFont().height + 1;
+			}
+		}
+
+		// Badges: Portuguese, favorite, save file.
+		y += 5;
+		int x = textX;
+		if (game->portuguese) x = drawBadge(canvas, x, y, "PT-BR", kBadgeGreen, kBadgeYellow) + 4;
+		if (isFavorite(state, *game)) {
+			drawStar(canvas, x + 1, y + 2, theme.favorite);
+			x += 14;
+		}
+		if (state.hasSave) drawBadge(canvas, x, y, "SAVE", theme.surfaceHigh, theme.text);
+
+		// Details under the art: console and origin, file, play history.
+		const FileTags tags = parseFileTags(game->path);
+		std::string origin = systemInfo(game->system).name;
+		if (!tags.region.empty()) origin += " \xC2\xB7 " + tags.region;
+		if (!tags.languages.empty()) origin += " \xC2\xB7 " + tags.languages;
+		std::string file = sizeText(game->fileSize);
+		if (!game->gameCode.empty()) file += " \xC2\xB7 " + game->gameCode;
+		file += " \xC2\xB7 " + fileName(game->path);
 		const GameStats* stats = state.userData->find(game->path);
-		std::string sizeLine = sizeText(game->fileSize);
-		if (!game->gameCode.empty()) sizeLine += "  \xC2\xB7  " + game->gameCode; // U+00B7 middle dot
-		std::vector<std::string> info = {systemInfo(game->system).name, sizeLine, playedText(stats)};
-		if (stats && stats->lastPlayed >= kFirstRtcTime) info.push_back("Last: " + formatDate(stats->lastPlayed));
-		for (const std::string& line : info) {
-			canvas.drawText(smallFont(), textX, y, ellipsize(smallFont(), line, textW), theme.muted);
-			y += smallFont().height + 2;
+		std::string played = playedText(stats);
+		if (stats && stats->lastPlayed >= kFirstRtcTime) played += " \xC2\xB7 last " + formatDate(stats->lastPlayed);
+		int lineY = art.y + art.h + 5;
+		for (const std::string& line : {origin, file, played}) {
+			canvas.drawText(smallFont(), 8, lineY, ellipsize(smallFont(), line, kScreenW - 16), theme.muted);
+			lineY += smallFont().height + 1;
 		}
-		// The file name tells apart dumps with the same title.
-		canvas.drawText(smallFont(), 8, kHintBarY - smallFont().height - 4, ellipsize(smallFont(), fileName(game->path), kScreenW - 16),
-			theme.muted);
 	}
 
 	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.surface);
-	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, state.query.empty() ? "A:Play X:Find Y:Fav START:Menu SEL:Filter" : "A:Play X:Find B:Clear search Y:Fav",
-		theme.muted);
+	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH},
+		state.query.empty() ? "A:Play X:Find Y:Fav START:Menu SEL:Filter" : "A:Play X:Find B:Clear search Y:Fav", theme.muted);
 }
 
 void drawBrowserScreen(Canvas& canvas, const BrowserState& state) {
@@ -296,7 +348,7 @@ void drawKeyboardScreen(Canvas& canvas, const Theme& theme, int selectedKey) {
 }
 
 void drawMenuScreen(Canvas& canvas, const Theme& theme, const std::string& title, const std::vector<MenuItem>& items,
-	int selected) {
+	int selected, const std::string& hint) {
 	canvas.fill(theme.background);
 	drawCentered(canvas, largeFont(), {0, 3, kScreenW, largeFont().height}, title, theme.text);
 	const std::string version = std::string("v") + kVersion;
@@ -320,7 +372,7 @@ void drawMenuScreen(Canvas& canvas, const Theme& theme, const std::string& title
 		}
 	}
 	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.surface);
-	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, "Left/Right:Change A:Select B:Close", theme.muted);
+	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, hint, theme.muted);
 }
 
 void drawMessageScreen(Canvas& canvas, const Theme& theme, const std::string& title, const std::vector<std::string>& lines) {

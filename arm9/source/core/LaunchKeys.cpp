@@ -84,6 +84,19 @@ std::vector<IniKey> bootstrapKeys(std::string_view romPath) {
 	};
 }
 
+std::vector<std::string> saveFileCandidates(std::string_view romPath) {
+	const size_t slash = romPath.find_last_of('/');
+	const std::string dir(romPath.substr(0, slash == std::string_view::npos ? 0 : slash + 1));
+	std::string_view name = romPath.substr(slash == std::string_view::npos ? 0 : slash + 1);
+	const size_t dot = name.find_last_of('.');
+	const std::string stem(dot == std::string_view::npos ? name : name.substr(0, dot));
+	System system;
+	if (!systemForPath(romPath, system)) return {};
+	if (system == System::Nds) return {dir + "saves/" + stem + ".sav"};
+	if (system == System::Snes) return {dir + stem + ".srm", dir + stem + ".sav"};
+	return {dir + stem + ".sav"};
+}
+
 bool usesRsetMarker(const uint8_t* arm9, size_t len) {
 	if (len < sizeof(kRsetBytes)) return false;
 	for (size_t i = 0; i + sizeof(kRsetBytes) <= len; ++i) {

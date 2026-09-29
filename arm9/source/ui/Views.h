@@ -22,6 +22,7 @@ struct BrowserState {
 	const UserData* userData = nullptr;
 	IconCache* icons = nullptr;                 // decoded icons, filled while drawing
 	const Cover* cover = nullptr;               // box art of the selected game, when loaded
+	bool hasSave = false;                       // the selected game has a save file
 	std::string_view query;                     // active search filter, empty when none
 	const std::vector<size_t>* view = nullptr; // indexes into library->games for the current tab
 	size_t cursor = 0;                          // position in view
@@ -63,7 +64,7 @@ struct MenuItem {
 
 // Bottom screen while the options menu is open: title, rows scrolled to keep selected in view.
 void drawMenuScreen(Canvas& canvas, const Theme& theme, const std::string& title, const std::vector<MenuItem>& items,
-	int selected);
+	int selected, const std::string& hint);
 
 // Full-screen message, e.g. while indexing or after an error.
 void drawMessageScreen(Canvas& canvas, const Theme& theme, const std::string& title, const std::vector<std::string>& lines);

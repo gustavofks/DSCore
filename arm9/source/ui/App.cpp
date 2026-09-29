@@ -96,7 +96,11 @@ void App::drawTop(Canvas& canvas) const {
 void App::drawBottom(Canvas& canvas) const {
 	const BrowserState s = state();
 	if (menuOpen_) {
-		drawMenuScreen(canvas, *theme_, menuPage_ == MenuPage::Main ? "Options" : "Consoles", menuItems(), menuRow_);
+		if (menuPage_ == MenuPage::Main) {
+			drawMenuScreen(canvas, *theme_, "Options", menuItems(), menuRow_, "Left/Right:Change A:Select B:Close");
+		} else {
+			drawMenuScreen(canvas, *theme_, "Consoles", menuItems(), menuRow_, "A:Show or hide the tab B:Back");
+		}
 		bottomValid_ = false;
 		return;
 	}
@@ -121,6 +125,13 @@ void App::drawBottom(Canvas& canvas) const {
 void App::setCover(const std::string& path, std::optional<Cover> cover) {
 	coverPath_ = path;
 	cover_ = std::move(cover);
+	const GameEntry* game = selected();
+	if (game && game->path == path) redraw_ = true;
+}
+
+void App::setHasSave(const std::string& path, bool hasSave) {
+	savePath_ = path;
+	hasSave_ = hasSave;
 	const GameEntry* game = selected();
 	if (game && game->path == path) redraw_ = true;
 }
@@ -169,6 +180,7 @@ BrowserState App::state() const {
 	s.icons = &icons_;
 	const GameEntry* game = selected();
 	s.cover = (cover_ && game && game->path == coverPath_) ? &*cover_ : nullptr;
+	s.hasSave = hasSave_ && game && game->path == savePath_;
 	s.view = &view_;
 	s.cursor = cursor_;
 	s.tabs = &tabs_;

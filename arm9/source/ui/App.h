@@ -59,6 +59,9 @@ public:
 	// Box art for the game at path (nullopt when it has none); shown while that game is selected.
 	void setCover(const std::string& path, std::optional<Cover> cover);
 
+	// Whether the game at path has a save file; shown while that game is selected.
+	void setHasSave(const std::string& path, bool hasSave);
+
 	// Each flag is cleared when read.
 	Sound takeSound();
 	bool takeBottomTransition(); // the bottom screen switched to another page or tab
@@ -111,6 +114,8 @@ private:
 	int keyIndex_ = 0;
 	std::string coverPath_;
 	std::optional<Cover> cover_;
+	std::string savePath_; // game the save flag belongs to
+	bool hasSave_ = false;
 	// The bottom screen keeps its pixels between frames: a cursor move within the page only redraws the
 	// two games involved. Anything else invalidates it.
 	mutable bool bottomValid_ = false;

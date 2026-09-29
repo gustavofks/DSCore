@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -26,6 +27,10 @@ std::vector<IniKey> bootstrapKeys(std::string_view romPath);
 // The TWiLight Menu++ emulator main.srldr boots for system's games in DSi mode, or nullptr for DS and
 // GBA games, which go through nds-bootstrap.
 const char* twilightEmulator(System system);
+
+// Where a game's save may be: nds-bootstrap keeps DS saves in a "saves" folder next to the ROM, GBARunner2
+// and the emulators write <name>.sav (SNEmulDS <name>.srm) next to it.
+std::vector<std::string> saveFileCandidates(std::string_view romPath);
 
 // main.srldr only honours the auto-run bit at 0x02000000 when 0x02000004 holds its warm-relaunch
 // marker; otherwise it treats the boot as cold and clears the bits. Older releases (v25.10.0) expect 0,

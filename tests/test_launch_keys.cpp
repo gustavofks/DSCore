@@ -139,3 +139,13 @@ TEST_CASE("relaunchMarker matches the protocol of the installed main.srldr") {
 	CHECK(relaunchMarker(true) == 0x54455352u);
 	CHECK(relaunchMarker(false) == 0u);
 }
+
+TEST_CASE("saveFileCandidates follows nds-bootstrap and emulator conventions") {
+	CHECK(saveFileCandidates("sd:/roms/NDS/br/Chrono Trigger (BR).nds") ==
+		std::vector<std::string>{"sd:/roms/NDS/br/saves/Chrono Trigger (BR).sav"});
+	CHECK(saveFileCandidates("sd:/roms/GBC/Donkey Kong Country (USA).gbc") ==
+		std::vector<std::string>{"sd:/roms/GBC/Donkey Kong Country (USA).sav"});
+	CHECK(saveFileCandidates("sd:/roms/SNES/Super Metroid.sfc") ==
+		std::vector<std::string>{"sd:/roms/SNES/Super Metroid.srm", "sd:/roms/SNES/Super Metroid.sav"});
+	CHECK(saveFileCandidates("sd:/roms/GBA/readme.txt").empty());
+}
