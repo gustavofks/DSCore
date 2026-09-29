@@ -32,11 +32,6 @@ struct GbaHeaderInfo {
 
 bool parseGbaHeader(const uint8_t* rom, size_t len, GbaHeaderInfo& out);
 
-// Display title from a ROM path: file name without extension and without trailing "(...)" / "[...]"
-// tags such as regions and dump groups, with a No-Intro trailing article moved to the front ("Legend of
-// Zelda, The" becomes "The Legend of Zelda"). Returns the bare name if stripping would leave nothing.
-std::string titleFromFileName(std::string_view path);
-
 // Two uppercase characters for a generated tile: the first letters of the first two significant words
 // (of the subtitle after " - " when there is one), or the first two letters of a single word; "?" when
 // the title has no letters. E.g. "MZ" for "Metroid Zero Mission", "ME" for "Classic NES Series - Metroid".

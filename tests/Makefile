@@ -1,6 +1,6 @@
 # Host unit tests for the pure code in arm9/source/core, gfx and ui.
 CXX      ?= g++
-CXXFLAGS := -std=gnu++17 -Wall -Wextra -Werror -O1 -I../arm9/source -I.
+CXXFLAGS := -std=gnu++17 -Wall -Wextra -Werror -Wno-missing-field-initializers -O1 -I../arm9/source -I.
 CORE     := $(wildcard ../arm9/source/core/*.cpp ../arm9/source/gfx/*.cpp ../arm9/source/ui/*.cpp)
 TESTS    := $(wildcard test_*.cpp)
 BIN      := build/run_tests

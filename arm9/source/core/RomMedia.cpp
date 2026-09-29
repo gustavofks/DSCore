@@ -14,12 +14,6 @@ constexpr size_t kGbaTitleOffset = 0xA0;
 constexpr size_t kGbaGameCodeOffset = 0xAC;
 constexpr uint16_t kOpaque = 0x8000;
 
-std::string trimSpaces(std::string_view s) {
-	while (!s.empty() && s.front() == ' ') s.remove_prefix(1);
-	while (!s.empty() && s.back() == ' ') s.remove_suffix(1);
-	return std::string(s);
-}
-
 bool isAlnum(char c) {
 	return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
@@ -33,21 +27,6 @@ bool isMinorWord(std::string_view word) {
 	std::string lower;
 	for (char c : word) lower += (c >= 'A' && c <= 'Z') ? char(c - 'A' + 'a') : c;
 	return lower == "the" || lower == "a" || lower == "an" || lower == "of";
-}
-
-// No-Intro moves a leading article behind the main title ("Legend of Zelda, The - Link's Awakening");
-// put it back in front.
-std::string articleFirst(const std::string& title) {
-	const size_t dash = title.find(" - ");
-	const std::string main = title.substr(0, dash);
-	for (const char* article : {"The", "A", "An"}) {
-		const std::string suffix = std::string(", ") + article;
-		if (main.size() > suffix.size() && main.compare(main.size() - suffix.size(), suffix.size(), suffix) == 0) {
-			const std::string rest = dash == std::string::npos ? std::string() : title.substr(dash);
-			return article + (" " + main.substr(0, main.size() - suffix.size())) + rest;
-		}
-	}
-	return title;
 }
 
 } // namespace
@@ -79,26 +58,6 @@ bool parseGbaHeader(const uint8_t* rom, size_t len, GbaHeaderInfo& out) {
 	out.title.resize(strnlen(out.title.c_str(), 12));
 	out.gameCode.assign(reinterpret_cast<const char*>(rom + kGbaGameCodeOffset), 4);
 	return true;
-}
-
-std::string titleFromFileName(std::string_view path) {
-	const size_t slash = path.find_last_of('/');
-	std::string_view name = (slash == std::string_view::npos) ? path : path.substr(slash + 1);
-	const size_t dot = name.find_last_of('.');
-	if (dot != std::string_view::npos && dot > 0) name = name.substr(0, dot);
-
-	std::string_view stripped = name;
-	while (true) {
-		while (!stripped.empty() && stripped.back() == ' ') stripped.remove_suffix(1);
-		if (stripped.empty()) break;
-		const char close = stripped.back();
-		if (close != ')' && close != ']') break;
-		const size_t open = stripped.find_last_of(close == ')' ? '(' : '[');
-		if (open == std::string_view::npos) break;
-		stripped = stripped.substr(0, open);
-	}
-	const std::string title = trimSpaces(stripped);
-	return title.empty() ? trimSpaces(name) : articleFirst(title);
 }
 
 std::string initialsFor(std::string_view title) {

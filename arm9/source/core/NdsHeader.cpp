@@ -69,13 +69,11 @@ bool isHomebrew(const NdsHeaderInfo& info, const uint8_t* arm9Start) {
 	return info.arm7Entry >= kArm7IwramStart && info.arm7Ram >= kArm7IwramStart;
 }
 
-std::string bannerTitle(const uint8_t* banner, size_t len, BannerLanguage lang) {
+std::string bannerText(const uint8_t* banner, size_t len, BannerLanguage lang) {
 	if (len < kBannerTitlesEnd || readU16(banner) == 0) return {};
 	const uint8_t* title = banner + kTitlesOffset + size_t(lang) * kTitleBytes;
 	std::string text = utf16leToUtf8(title, kTitleBytes / 2);
-	const size_t newline = text.find('\n');
-	if (newline != std::string::npos) text.resize(newline);
-	while (!text.empty() && (text.back() == ' ' || text.back() == '\r')) text.pop_back();
+	while (!text.empty() && (text.back() == ' ' || text.back() == '\r' || text.back() == '\n')) text.pop_back();
 	return text;
 }
 

@@ -18,6 +18,8 @@ struct GameEntry {
 	std::string gameCode; // 4 characters, empty when unknown
 	uint32_t fileSize = 0;
 	int32_t iconIndex = -1; // index into LibraryData::icons, -1 when the game has no icon
+	std::string publisher;  // from the DS banner, empty when unknown
+	bool portuguese = false; // Portuguese release or fan translation (see parseFileTags)
 };
 
 // A bottom-screen tab: every game, favorites, recently played, or the games of one console.
