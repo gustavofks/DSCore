@@ -18,7 +18,7 @@ clean:
 	rm -rf build
 
 # Host preview of the UI rendered from real ROM folders (see preview.cpp); not part of the test run.
-PLATFORM := ../arm9/source/platform/FileIo.cpp ../arm9/source/platform/RomFiles.cpp
+PLATFORM := ../arm9/source/platform/FileIo.cpp ../arm9/source/platform/RomFiles.cpp ../arm9/source/platform/Storage.cpp
 LODEPNG  := ../third_party/twilight/universal/source/lodepng/lodepng.cpp
 
 .PHONY: preview

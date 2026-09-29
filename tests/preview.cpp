@@ -14,6 +14,7 @@
 #include "core/LibraryScan.h"
 #include "platform/FileIo.h"
 #include "platform/RomFiles.h"
+#include "platform/Storage.h"
 #include "ui/App.h"
 #include "ui/Keyboard.h"
 #include "ui/Layout.h"
@@ -87,6 +88,13 @@ int main(int argc, char** argv) {
 		app.drawBottom(bottomCanvas);
 		writePng(outDir + "/" + name + ".png", top, bottom);
 	};
+	std::vector<ThumbEntry> thumbs;
+	const bool hasThumbs = storage::openThumbs(thumbs);
+	std::printf("%zu thumbnails\n", thumbs.size());
+	auto prepare = [&](App& app) {
+		app.setThemes(builtInThemes());
+		if (hasThumbs) app.setThumbSource(thumbs, storage::readThumb);
+	};
 	auto pathOf = [&](const std::string& needle) {
 		for (const GameEntry& game : library.games) {
 			if (game.path.find(needle) != std::string::npos) return game.path;
@@ -97,20 +105,23 @@ int main(int argc, char** argv) {
 	Config config;
 	config.selectedPath = pathOf("HeartGold");
 	App app(library, userData, config);
-	app.setThemes(builtInThemes());
+	prepare(app);
 	shot(app, "01-all-grid");
 
 	config.selectedPath = pathOf("br/The Legend of Zelda");
 	App br(library, userData, config);
+	prepare(br);
 	shot(br, "02-br-detail");
 
 	config.selectedPath = pathOf("Star Wars - The Force Unleashed II");
 	App longTitle(library, userData, config);
+	prepare(longTitle);
 	shot(longTitle, "03-long-title");
 
 	config.selectedPath = pathOf("Metroid II");
 	config.tab = Tab::console(System::Gb);
 	App gb(library, userData, config);
+	prepare(gb);
 	shot(gb, "04-gb-tab-save");
 
 	config.selectedPath.clear();
@@ -118,17 +129,20 @@ int main(int argc, char** argv) {
 	config.filter = Filter::Portuguese;
 	config.view = ViewMode::List;
 	App portuguese(library, userData, config);
+	prepare(portuguese);
 	shot(portuguese, "05-portuguese-list");
 
 	config.filter = Filter::Played;
 	config.sort = SortKey::Recent;
 	config.view = ViewMode::Grid;
 	App recent(library, userData, config);
+	prepare(recent);
 	shot(recent, "06-played-recent");
 
 	config = Config{};
 	config.tab = Tab::console(System::Atari2600);
 	App last(library, userData, config);
+	prepare(last);
 	shot(last, "07-tabs-scrolled");
 
 	app.handle(Action::Menu);

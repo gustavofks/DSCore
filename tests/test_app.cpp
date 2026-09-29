@@ -140,7 +140,7 @@ TEST_CASE("App options menu toggles sounds") {
 	Config config;
 	App app(lib, data, config);
 	app.handle(Action::Menu);
-	for (int i = 0; i < 4; ++i) app.handle(Action::Down);
+	for (int i = 0; i < 5; ++i) app.handle(Action::Down);
 	app.handle(Action::Launch);
 	CHECK_FALSE(config.sound);
 }
@@ -183,6 +183,10 @@ TEST_CASE("App options menu changes sort, view and theme and requests a rebuild"
 	app.handle(Action::Down); // view
 	app.handle(Action::Right);
 	CHECK(config.view == ViewMode::List);
+
+	app.handle(Action::Down); // grid art
+	app.handle(Action::Launch);
+	CHECK_FALSE(config.gridCovers);
 
 	app.handle(Action::Down); // theme
 	app.handle(Action::Right);
@@ -388,7 +392,7 @@ TEST_CASE("App options menu hides and shows console tabs") {
 	config.tab = Tab::console(System::Gba);
 	App app(lib, data, config);
 	app.handle(Action::Menu);
-	for (int i = 0; i < 5; ++i) app.handle(Action::Down);
+	for (int i = 0; i < 6; ++i) app.handle(Action::Down);
 	app.handle(Action::Launch); // Consoles...: DS, GBA, Back
 	app.handle(Action::Down);
 	app.handle(Action::Launch); // hide GBA
@@ -415,7 +419,7 @@ TEST_CASE("App options menu picks a random game from the list") {
 		const std::string before = app.selected()->path;
 		app.handle(Action::Menu); // remembers the last row: go back to the top first
 		for (int i = 0; i < 10; ++i) app.handle(Action::Up);
-		for (int i = 0; i < 6; ++i) app.handle(Action::Down);
+		for (int i = 0; i < 7; ++i) app.handle(Action::Down);
 		app.handle(Action::Launch);
 		CHECK_FALSE(app.menuOpen());
 		REQUIRE(app.selected() != nullptr);
@@ -429,10 +433,10 @@ TEST_CASE("App menu scrolls and hit-tests the rows on screen") {
 	Config config;
 	App app(lib, data, config);
 	app.handle(Action::Menu);
-	for (int i = 0; i < 8; ++i) app.handle(Action::Down); // last row: Close
-	const int first = layout::menuFirstRow(8, 9);
+	for (int i = 0; i < 9; ++i) app.handle(Action::Down); // last row: Close
+	const int first = layout::menuFirstRow(9, 10);
 	CHECK(first > 0);
-	const Rect close = layout::menuRowRect(8 - first);
+	const Rect close = layout::menuRowRect(9 - first);
 	app.handle(Action::Tap, close.x + 4, close.y + 4);
 	CHECK_FALSE(app.menuOpen());
 }

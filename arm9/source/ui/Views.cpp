@@ -139,8 +139,14 @@ void drawGridCell(Canvas& canvas, const BrowserState& state, size_t index) {
 		canvas.fillRect({cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4}, theme.surfaceHigh);
 		canvas.strokeRect({cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4}, theme.accent, 2);
 	}
-	drawGameTile(canvas, theme, *state.library, *state.icons, game, cell.x + (cell.w - kIconSize) / 2,
-		cell.y + (cell.h - kIconSize) / 2, kIconSize);
+	int thumbW = 0, thumbH = 0;
+	const uint16_t* thumb = state.thumbs ? state.thumbs->get(game.path, thumbW, thumbH) : nullptr;
+	if (thumb) {
+		canvas.blit(thumb, thumbW, thumbH, cell.x + (cell.w - thumbW) / 2, cell.y + (cell.h - thumbH) / 2);
+	} else {
+		drawGameTile(canvas, theme, *state.library, *state.icons, game, cell.x + (cell.w - kIconSize) / 2,
+			cell.y + (cell.h - kIconSize) / 2, kIconSize);
+	}
 	if (isFavorite(state, game)) drawStar(canvas, cell.x + cell.w - 13, cell.y + 4, theme.favorite);
 	if (game.portuguese) drawBadge(canvas, cell.x + 3, cell.y + cell.h - smallFont().height - 4, "BR", kBadgeGreen, kBadgeYellow);
 }

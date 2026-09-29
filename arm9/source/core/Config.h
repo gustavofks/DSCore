@@ -18,6 +18,7 @@ struct Config {
 	std::string selectedPath; // game under the cursor
 	std::string theme;        // theme name; empty = the default theme
 	bool sound = true;        // interface sound effects
+	bool gridCovers = true;   // the grid shows box art thumbnails when there are some, else icons
 	uint32_t hiddenSystems = 0; // consoles without a tab, one bit per System value
 
 	std::string serialize() const;

@@ -46,6 +46,9 @@ public:
 
 	bool menuOpen() const { return menuOpen_; }
 
+	// Box art thumbnails for the grid (see ThumbCache).
+	void setThumbSource(std::vector<ThumbEntry> entries, ThumbCache::Loader loader);
+
 	// Seeds "Random game" in the options menu, e.g. with the time.
 	void seedRandom(uint32_t seed) { random_ = seed ? seed : 1; }
 
@@ -87,8 +90,10 @@ private:
 	std::vector<Tab> tabs_; // tab bar for the current library
 	std::vector<size_t> view_;
 	mutable IconCache icons_; // drawing is const but warms the cache
+	mutable ThumbCache thumbs_;
 	enum MenuRow {
-		kFilterRow, kSortRow, kViewRow, kThemeRow, kSoundRow, kConsolesRow, kRandomRow, kRebuildRow, kCloseRow, kMenuRows
+		kFilterRow, kSortRow, kViewRow, kGridArtRow, kThemeRow, kSoundRow, kConsolesRow, kRandomRow, kRebuildRow, kCloseRow,
+		kMenuRows
 	};
 	enum class MenuPage : uint8_t { Main, Consoles };
 	std::vector<System> menuConsoles() const; // consoles listed on the Consoles page

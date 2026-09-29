@@ -11,6 +11,7 @@
 #include "core/UserData.h"
 #include "gfx/Canvas.h"
 #include "ui/IconCache.h"
+#include "ui/ThumbCache.h"
 #include "ui/Theme.h"
 
 namespace dscore {
@@ -21,6 +22,7 @@ struct BrowserState {
 	const LibraryData* library = nullptr;
 	const UserData* userData = nullptr;
 	IconCache* icons = nullptr;                 // decoded icons, filled while drawing
+	ThumbCache* thumbs = nullptr;               // grid box art, filled while drawing; null to show icons
 	const Cover* cover = nullptr;               // box art of the selected game, when loaded
 	bool hasSave = false;                       // the selected game has a save file
 	std::string_view query;                     // active search filter, empty when none

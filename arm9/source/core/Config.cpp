@@ -62,6 +62,7 @@ std::string Config::serialize() const {
 	out += "SELECTED = " + selectedPath + "\n";
 	out += "THEME = " + theme + "\n";
 	out += std::string("SOUND = ") + (sound ? "1" : "0") + "\n";
+	out += std::string("GRID_ART = ") + (gridCovers ? "covers" : "icons") + "\n";
 	out += "HIDDEN = " + hiddenIds(hiddenSystems) + "\n";
 	return out;
 }
@@ -81,6 +82,7 @@ Config Config::parse(std::string_view ini) {
 		else if (key == "SELECTED") config.selectedPath = std::string(value);
 		else if (key == "THEME") config.theme = std::string(value);
 		else if (key == "SOUND" && isNumber) config.sound = number != 0;
+		else if (key == "GRID_ART") config.gridCovers = value != "icons";
 		else if (key == "HIDDEN") config.hiddenSystems = parseHidden(value);
 	});
 	if (!hasFilter && legacy == LegacyTab::Favorites) config.filter = Filter::Favorites;

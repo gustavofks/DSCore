@@ -129,6 +129,11 @@ void App::setCover(const std::string& path, std::optional<Cover> cover) {
 	if (game && game->path == path) redraw_ = true;
 }
 
+void App::setThumbSource(std::vector<ThumbEntry> entries, ThumbCache::Loader loader) {
+	thumbs_.setSource(std::move(entries), std::move(loader));
+	invalidate();
+}
+
 void App::setHasSave(const std::string& path, bool hasSave) {
 	savePath_ = path;
 	hasSave_ = hasSave;
@@ -178,6 +183,7 @@ BrowserState App::state() const {
 	s.library = &library_;
 	s.userData = &userData_;
 	s.icons = &icons_;
+	s.thumbs = config_.gridCovers && !thumbs_.empty() ? &thumbs_ : nullptr;
 	const GameEntry* game = selected();
 	s.cover = (cover_ && game && game->path == coverPath_) ? &*cover_ : nullptr;
 	s.hasSave = hasSave_ && game && game->path == savePath_;
@@ -264,6 +270,7 @@ std::vector<MenuItem> App::menuItems() const {
 	items[kFilterRow] = {"Show", filterLabel(config_.filter)};
 	items[kSortRow] = {"Sort by", sortKeyLabel(config_.sort)};
 	items[kViewRow] = {"View", config_.view == ViewMode::Grid ? "Grid" : "List"};
+	items[kGridArtRow] = {"Grid art", config_.gridCovers ? "Box art" : "Icons"};
 	items[kThemeRow] = {"Theme", theme_->name};
 	items[kSoundRow] = {"Sounds", config_.sound ? "On" : "Off"};
 	items[kConsolesRow] = {"Consoles...", ""};
@@ -333,6 +340,10 @@ void App::activateMenuRow(int row, int direction) {
 			break;
 		case kViewRow:
 			config_.view = config_.view == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
+			configChanged_ = true;
+			break;
+		case kGridArtRow:
+			config_.gridCovers = !config_.gridCovers;
 			configChanged_ = true;
 			break;
 		case kThemeRow: {
