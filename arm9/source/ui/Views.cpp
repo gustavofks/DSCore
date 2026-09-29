@@ -23,6 +23,19 @@ constexpr uint16_t kTileText = rgb(31, 31, 31); // generated tiles use mid-tone 
 // 9x9 star, bit 8 = leftmost pixel.
 constexpr uint16_t kStar[9] = {0x010, 0x010, 0x038, 0x1FF, 0x0FE, 0x07C, 0x06C, 0x0C6, 0x082};
 
+// 5-pixel-wide triangle pointing up (direction -1), down (1), left (-2) or right (2).
+void drawArrow(Canvas& canvas, int x, int y, int direction, uint16_t color) {
+	for (int i = 0; i < 3; ++i) {
+		const int len = 5 - 2 * i;
+		switch (direction) {
+			case -1: canvas.fillRect({x + i, y + 2 - i, len, 1}, color); break;
+			case 1: canvas.fillRect({x + i, y + i, len, 1}, color); break;
+			case -2: canvas.fillRect({x + 2 - i, y + i, 1, len}, color); break;
+			default: canvas.fillRect({x + i, y + i, 1, len}, color); break;
+		}
+	}
+}
+
 void drawStar(Canvas& canvas, int x, int y, uint16_t color) {
 	for (int row = 0; row < 9; ++row) {
 		for (int col = 0; col < 9; ++col) {
@@ -282,13 +295,19 @@ void drawKeyboardScreen(Canvas& canvas, const Theme& theme, int selectedKey) {
 	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, "Touch or use the D-pad", theme.muted);
 }
 
-void drawMenuScreen(Canvas& canvas, const Theme& theme, const std::vector<MenuItem>& items, int selected) {
+void drawMenuScreen(Canvas& canvas, const Theme& theme, const std::string& title, const std::vector<MenuItem>& items,
+	int selected) {
 	canvas.fill(theme.background);
-	drawCentered(canvas, largeFont(), {0, 4, kScreenW, largeFont().height}, "Options", theme.text);
+	drawCentered(canvas, largeFont(), {0, 3, kScreenW, largeFont().height}, title, theme.text);
 	const std::string version = std::string("v") + kVersion;
-	canvas.drawText(smallFont(), kScreenW - 6 - textWidth(smallFont(), version), 8, version, theme.muted);
-	for (size_t i = 0; i < items.size(); ++i) {
-		const Rect r = menuRowRect(int(i));
+	canvas.drawText(smallFont(), kScreenW - 6 - textWidth(smallFont(), version), 7, version, theme.muted);
+	const int first = menuFirstRow(selected, int(items.size()));
+	if (first > 0) drawArrow(canvas, 5, kMenuTop + 2, -1, theme.muted);
+	if (first + kMenuVisibleRows < int(items.size())) {
+		drawArrow(canvas, 5, kMenuTop + kMenuVisibleRows * kMenuRowH - 8, 1, theme.muted);
+	}
+	for (size_t i = size_t(first); i < items.size() && int(i) < first + kMenuVisibleRows; ++i) {
+		const Rect r = menuRowRect(int(i) - first);
 		const bool on = int(i) == selected;
 		canvas.fillRect(r, on ? theme.surfaceHigh : theme.surface);
 		if (on) canvas.fillRect({r.x, r.y, 3, r.h}, theme.accent);

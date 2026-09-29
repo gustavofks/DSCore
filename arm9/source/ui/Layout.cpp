@@ -50,13 +50,18 @@ Rect footerSortRect() {
 	return {kScreenW * 3 / 5, kScreenH - kFooterH, kScreenW * 2 / 5, kFooterH};
 }
 
-Rect menuRowRect(int row) {
-	return {12, kMenuTop + row * kMenuRowH, kScreenW - 24, kMenuRowH - 4};
+int menuFirstRow(int selected, int rows) {
+	return std::clamp(selected - kMenuVisibleRows / 2, 0, std::max(0, rows - kMenuVisibleRows));
 }
 
-int menuRowAt(int x, int y, int rows) {
-	for (int row = 0; row < rows; ++row) {
-		if (menuRowRect(row).contains(x, y)) return row;
+Rect menuRowRect(int slot) {
+	return {12, kMenuTop + slot * kMenuRowH, kScreenW - 24, kMenuRowH - 3};
+}
+
+int menuRowAt(int x, int y, int selected, int rows) {
+	const int first = menuFirstRow(selected, rows);
+	for (int slot = 0; slot < kMenuVisibleRows && first + slot < rows; ++slot) {
+		if (menuRowRect(slot).contains(x, y)) return first + slot;
 	}
 	return -1;
 }

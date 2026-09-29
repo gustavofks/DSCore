@@ -46,6 +46,9 @@ public:
 
 	bool menuOpen() const { return menuOpen_; }
 
+	// Seeds "Random game" in the options menu, e.g. with the time.
+	void seedRandom(uint32_t seed) { random_ = seed ? seed : 1; }
+
 	// True once after the user picked "Rebuild library" in the options menu.
 	bool takeRebuildRequest();
 
@@ -81,10 +84,17 @@ private:
 	std::vector<Tab> tabs_; // tab bar for the current library
 	std::vector<size_t> view_;
 	mutable IconCache icons_; // drawing is const but warms the cache
-	enum MenuRow { kFilterRow, kSortRow, kViewRow, kThemeRow, kSoundRow, kRebuildRow, kCloseRow, kMenuRows };
+	enum MenuRow {
+		kFilterRow, kSortRow, kViewRow, kThemeRow, kSoundRow, kConsolesRow, kRandomRow, kRebuildRow, kCloseRow, kMenuRows
+	};
+	enum class MenuPage : uint8_t { Main, Consoles };
+	std::vector<System> menuConsoles() const; // consoles listed on the Consoles page
 	std::vector<MenuItem> menuItems() const;
 	void handleMenu(Action action, int touchX, int touchY);
 	void activateMenuRow(int row, int direction);
+	void activateConsoleRow(int row);
+	int menuRowCount() const;
+	void pickRandomGame();
 	void setMenuOpen(bool open);
 	void handleSearch(Action action, int touchX, int touchY);
 	void pressKey(int index);
@@ -92,6 +102,8 @@ private:
 
 	bool menuOpen_ = false;
 	int menuRow_ = 0;
+	MenuPage menuPage_ = MenuPage::Main;
+	uint32_t random_ = 0x2545F491; // xorshift state for "Random game"
 	bool rebuildRequested_ = false;
 	const std::vector<Theme>* themes_ = nullptr;
 	bool searching_ = false; // the keyboard is on screen

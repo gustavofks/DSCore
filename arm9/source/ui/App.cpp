@@ -96,7 +96,7 @@ void App::drawTop(Canvas& canvas) const {
 void App::drawBottom(Canvas& canvas) const {
 	const BrowserState s = state();
 	if (menuOpen_) {
-		drawMenuScreen(canvas, *theme_, menuItems(), menuRow_);
+		drawMenuScreen(canvas, *theme_, menuPage_ == MenuPage::Main ? "Options" : "Consoles", menuItems(), menuRow_);
 		bottomValid_ = false;
 		return;
 	}
@@ -239,12 +239,23 @@ void App::select(size_t cursor) {
 }
 
 std::vector<MenuItem> App::menuItems() const {
+	if (menuPage_ == MenuPage::Consoles) {
+		std::vector<MenuItem> items;
+		for (System system : menuConsoles()) {
+			const bool hidden = config_.hiddenSystems & (1u << int(system));
+			items.push_back({systemInfo(system).name, hidden ? "Hidden" : "Shown"});
+		}
+		items.push_back({"Back", ""});
+		return items;
+	}
 	std::vector<MenuItem> items(kMenuRows);
 	items[kFilterRow] = {"Show", filterLabel(config_.filter)};
 	items[kSortRow] = {"Sort by", sortKeyLabel(config_.sort)};
 	items[kViewRow] = {"View", config_.view == ViewMode::Grid ? "Grid" : "List"};
 	items[kThemeRow] = {"Theme", theme_->name};
 	items[kSoundRow] = {"Sounds", config_.sound ? "On" : "Off"};
+	items[kConsolesRow] = {"Consoles...", ""};
+	items[kRandomRow] = {"Random game", ""};
 	items[kRebuildRow] = {"Rebuild library", ""};
 	items[kCloseRow] = {"Close", ""};
 	return items;
@@ -259,19 +270,33 @@ void App::handleMenu(Action action, int touchX, int touchY) {
 			sound_ = Sound::Move;
 			break;
 		case Action::Down:
-			menuRow_ = std::min(int(kMenuRows) - 1, menuRow_ + 1);
+			menuRow_ = std::min(menuRowCount() - 1, menuRow_ + 1);
 			sound_ = Sound::Move;
 			break;
-		case Action::Left: activateMenuRow(menuRow_, -1); break;
+		case Action::Left:
 		case Action::Right:
-		case Action::Launch: activateMenuRow(menuRow_, 1); break;
+		case Action::Launch: {
+			const int direction = action == Action::Left ? -1 : 1;
+			if (menuPage_ == MenuPage::Main) activateMenuRow(menuRow_, direction);
+			else activateConsoleRow(menuRow_);
+			break;
+		}
 		case Action::Back:
-		case Action::Menu: setMenuOpen(false); break;
+		case Action::Menu:
+			if (menuPage_ == MenuPage::Consoles) {
+				menuPage_ = MenuPage::Main;
+				menuRow_ = kConsolesRow;
+				sound_ = Sound::Back;
+			} else {
+				setMenuOpen(false);
+			}
+			break;
 		case Action::Tap: {
-			const int row = layout::menuRowAt(touchX, touchY, kMenuRows);
+			const int row = layout::menuRowAt(touchX, touchY, menuRow_, menuRowCount());
 			if (row < 0) return;
 			menuRow_ = row;
-			activateMenuRow(row, 1);
+			if (menuPage_ == MenuPage::Main) activateMenuRow(row, 1);
+			else activateConsoleRow(row);
 			break;
 		}
 		default: return;
@@ -313,6 +338,15 @@ void App::activateMenuRow(int row, int direction) {
 			config_.sound = !config_.sound;
 			configChanged_ = true;
 			break;
+		case kConsolesRow:
+			if (direction < 0) break;
+			menuPage_ = MenuPage::Consoles;
+			menuRow_ = 0;
+			break;
+		case kRandomRow:
+			if (direction < 0) break;
+			pickRandomGame();
+			break;
 		case kRebuildRow:
 			if (direction < 0) break;
 			rebuildRequested_ = true;
@@ -324,8 +358,53 @@ void App::activateMenuRow(int row, int direction) {
 	}
 }
 
+int App::menuRowCount() const {
+	return menuPage_ == MenuPage::Main ? int(kMenuRows) : int(menuConsoles().size()) + 1; // + Back
+}
+
+std::vector<System> App::menuConsoles() const {
+	// Every console with games, hidden or not, in tab order.
+	std::vector<System> systems;
+	for (const Tab& tab : availableTabs(library_.games)) {
+		if (tab.kind == Tab::Kind::Console) systems.push_back(tab.system);
+	}
+	return systems;
+}
+
+// Consoles page: A shows or hides the console's tab; the last row goes back.
+void App::activateConsoleRow(int row) {
+	const std::vector<System> systems = menuConsoles();
+	if (row >= int(systems.size())) {
+		menuPage_ = MenuPage::Main;
+		menuRow_ = kConsolesRow;
+		sound_ = Sound::Back;
+		return;
+	}
+	sound_ = Sound::Select;
+	config_.hiddenSystems ^= 1u << int(systems[size_t(row)]);
+	configChanged_ = true;
+	const GameEntry* current = selected();
+	const std::string currentPath = current ? current->path : config_.selectedPath;
+	refreshTabs();
+	rebuildView(currentPath);
+}
+
+// Selects a random game of the current list (another one when there is a choice) and closes the menu.
+void App::pickRandomGame() {
+	if (view_.empty()) return;
+	random_ ^= random_ << 13;
+	random_ ^= random_ >> 17;
+	random_ ^= random_ << 5;
+	size_t pick = random_ % view_.size();
+	if (pick == cursor_ && view_.size() > 1) pick = (pick + 1 + random_ / 7 % (view_.size() - 1)) % view_.size();
+	setMenuOpen(false);
+	select(pick);
+	sound_ = Sound::Launch;
+}
+
 void App::setMenuOpen(bool open) {
 	menuOpen_ = open;
+	if (open) menuPage_ = MenuPage::Main;
 	sound_ = open ? Sound::Select : Sound::Back;
 	bottomValid_ = false;
 	redraw_ = true;

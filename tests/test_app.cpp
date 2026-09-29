@@ -193,6 +193,8 @@ TEST_CASE("App options menu changes sort, view and theme and requests a rebuild"
 	CHECK(config.theme == builtInThemes().back().name);
 
 	app.handle(Action::Down); // sounds
+	app.handle(Action::Down); // consoles
+	app.handle(Action::Down); // random game
 	app.handle(Action::Down); // rebuild
 	app.handle(Action::Launch);
 	CHECK_FALSE(app.menuOpen());
@@ -377,4 +379,60 @@ TEST_CASE("App hides tabs of consoles without games and forgets a saved tab that
 	CHECK(config.tab == Tab::console(System::Nds));
 	app.handle(Action::NextTab); // no GBA games: back to All
 	CHECK(config.tab == Tab::all());
+}
+
+TEST_CASE("App options menu hides and shows console tabs") {
+	const LibraryData lib = library(2, 2);
+	UserData data;
+	Config config;
+	config.tab = Tab::console(System::Gba);
+	App app(lib, data, config);
+	app.handle(Action::Menu);
+	for (int i = 0; i < 5; ++i) app.handle(Action::Down);
+	app.handle(Action::Launch); // Consoles...: DS, GBA, Back
+	app.handle(Action::Down);
+	app.handle(Action::Launch); // hide GBA
+	CHECK(config.hiddenSystems == (1u << int(System::Gba)));
+	CHECK(config.tab == Tab::all()); // its tab is gone
+	app.handle(Action::Launch); // show it again
+	CHECK(config.hiddenSystems == 0);
+	app.handle(Action::Back); // back to the main page
+	CHECK(app.menuOpen());
+	app.handle(Action::Back);
+	CHECK_FALSE(app.menuOpen());
+	app.handle(Action::NextTab);
+	app.handle(Action::NextTab);
+	CHECK(config.tab == Tab::console(System::Gba));
+}
+
+TEST_CASE("App options menu picks a random game from the list") {
+	const LibraryData lib = library(10, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	app.seedRandom(1234);
+	for (int round = 0; round < 5; ++round) {
+		const std::string before = app.selected()->path;
+		app.handle(Action::Menu); // remembers the last row: go back to the top first
+		for (int i = 0; i < 10; ++i) app.handle(Action::Up);
+		for (int i = 0; i < 6; ++i) app.handle(Action::Down);
+		app.handle(Action::Launch);
+		CHECK_FALSE(app.menuOpen());
+		REQUIRE(app.selected() != nullptr);
+		CHECK(app.selected()->path != before);
+	}
+}
+
+TEST_CASE("App menu scrolls and hit-tests the rows on screen") {
+	const LibraryData lib = library(1, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	app.handle(Action::Menu);
+	for (int i = 0; i < 8; ++i) app.handle(Action::Down); // last row: Close
+	const int first = layout::menuFirstRow(8, 9);
+	CHECK(first > 0);
+	const Rect close = layout::menuRowRect(8 - first);
+	app.handle(Action::Tap, close.x + 4, close.y + 4);
+	CHECK_FALSE(app.menuOpen());
 }

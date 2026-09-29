@@ -61,8 +61,9 @@ struct MenuItem {
 	std::string value; // empty for actions
 };
 
-// Bottom screen while the options menu is open.
-void drawMenuScreen(Canvas& canvas, const Theme& theme, const std::vector<MenuItem>& items, int selected);
+// Bottom screen while the options menu is open: title, rows scrolled to keep selected in view.
+void drawMenuScreen(Canvas& canvas, const Theme& theme, const std::string& title, const std::vector<MenuItem>& items,
+	int selected);
 
 // Full-screen message, e.g. while indexing or after an error.
 void drawMessageScreen(Canvas& canvas, const Theme& theme, const std::string& title, const std::vector<std::string>& lines);

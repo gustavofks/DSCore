@@ -215,6 +215,7 @@ int main(int argc, char** argv) {
 	LibraryData library = loadLibrary(screens, log);
 	App app(library, userData, config);
 	app.setThemes(themes);
+	app.seedRandom(uint32_t(time(nullptr)) ^ elapsedMs());
 	log += "ready: " + std::to_string(elapsedMs()) + " ms since start\n";
 
 	// One full redraw of both screens: the cost of every cursor move.
