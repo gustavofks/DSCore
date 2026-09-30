@@ -64,6 +64,7 @@ int main(int argc, char** argv) {
 		return readRomInfo(path, BannerLanguage::English, game, icon);
 	});
 	std::printf("%zu games, %zu icons\n", library.games.size(), library.icons.size());
+	std::printf("%zu with metadata\n", applyMetadata(storage::loadMetadata(), library.games));
 
 	std::string ini;
 	readFile(userDataPath, ini);
@@ -138,6 +139,13 @@ int main(int argc, char** argv) {
 	App recent(library, userData, config);
 	prepare(recent);
 	shot(recent, "06-played-recent");
+
+	config.filter = Filter::All;
+	config.genre = "RPG";
+	config.sort = SortKey::Year;
+	App rpg(library, userData, config);
+	prepare(rpg);
+	shot(rpg, "06b-rpg-by-year");
 
 	config = Config{};
 	config.tab = Tab::console(System::Atari2600);

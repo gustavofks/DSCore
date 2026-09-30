@@ -8,7 +8,7 @@ namespace dscore {
 
 namespace {
 
-constexpr SortKey kSortCycle[] = {SortKey::Name, SortKey::Recent, SortKey::MostPlayed, SortKey::System};
+constexpr SortKey kSortCycle[] = {SortKey::Name, SortKey::Recent, SortKey::MostPlayed, SortKey::Year, SortKey::System};
 constexpr int kSortKeyCount = int(sizeof(kSortCycle) / sizeof(kSortCycle[0]));
 
 // Case-insensitive ASCII ordering; bytes outside ASCII compare as-is.
@@ -139,18 +139,20 @@ const char* sortKeyLabel(SortKey key) {
 		case SortKey::System: return "System";
 		case SortKey::MostPlayed: return "Most played";
 		case SortKey::Recent: return "Recent";
+		case SortKey::Year: return "Year";
 	}
 	return "";
 }
 
 std::vector<size_t> libraryView(const std::vector<GameEntry>& games, const UserData& data, Tab tab, Filter filter,
-	SortKey sort, std::string_view query) {
+	SortKey sort, std::string_view query, std::string_view genre) {
 	std::vector<size_t> view;
 	std::vector<GameStats> stats(games.size());
 	const std::string folded = foldForSearch(query);
 	for (size_t i = 0; i < games.size(); ++i) {
 		stats[i] = statsFor(data, games[i]);
 		if (!passes(games[i], stats[i], tab, filter)) continue;
+		if (!genre.empty() && games[i].genre != genre) continue;
 		if (!folded.empty() && foldForSearch(games[i].title).find(folded) == std::string::npos) continue;
 		view.push_back(i);
 	}
@@ -162,6 +164,9 @@ std::vector<size_t> libraryView(const std::vector<GameEntry>& games, const UserD
 			if (games[a].system != games[b].system) return displayOrder(games[a].system) < displayOrder(games[b].system);
 		} else if (sort == SortKey::MostPlayed) {
 			if (stats[a].timesPlayed != stats[b].timesPlayed) return stats[a].timesPlayed > stats[b].timesPlayed;
+		} else if (sort == SortKey::Year) {
+			const uint32_t ya = games[a].year ? games[a].year : 0xFFFF, yb = games[b].year ? games[b].year : 0xFFFF;
+			if (ya != yb) return ya < yb;
 		}
 		return byName(games[a], games[b]);
 	});

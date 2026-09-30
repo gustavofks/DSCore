@@ -215,6 +215,7 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 	// Where the list comes from: tab and filter, or the search.
 	std::string where = state.tab.kind == Tab::Kind::All ? "All games" : systemInfo(state.tab.system).name;
 	if (state.filter != Filter::All) where += std::string(" \xC2\xB7 ") + filterLabel(state.filter);
+	if (!state.genre.empty()) where += " \xC2\xB7 " + std::string(state.genre);
 	if (!state.query.empty()) where = "Search: " + std::string(state.query);
 	const GameEntry* game = selectedGame(state);
 	const std::string position =
@@ -249,12 +250,21 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 			canvas.drawText(titleFont, textX, y, line, theme.text);
 			y += titleFont.height + (large ? 1 : 2);
 		}
-		if (!game->publisher.empty()) {
+		// Publisher from the banner, or the developer from metadata.ini; then genre, year and players.
+		const std::string& maker = game->publisher.empty() ? game->developer : game->publisher;
+		if (!maker.empty()) {
 			y += 2;
-			for (const std::string& line : wrapText(smallFont(), game->publisher, textW, 2)) {
+			for (const std::string& line : wrapText(smallFont(), maker, textW, 2)) {
 				canvas.drawText(smallFont(), textX, y, line, theme.muted);
 				y += smallFont().height + 1;
 			}
+		}
+		std::string facts = game->genre;
+		if (game->year) facts += (facts.empty() ? "" : " \xC2\xB7 ") + std::to_string(game->year);
+		if (game->players > 1) facts += (facts.empty() ? "" : " \xC2\xB7 ") + std::string("1-") + std::to_string(game->players) + "P";
+		if (!facts.empty()) {
+			canvas.drawText(smallFont(), textX, y + 1, ellipsize(smallFont(), facts, textW), theme.accent);
+			y += smallFont().height + 2;
 		}
 
 		// Badges: Portuguese, favorite, save file.

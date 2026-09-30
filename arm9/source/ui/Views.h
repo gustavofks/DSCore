@@ -31,6 +31,7 @@ struct BrowserState {
 	const std::vector<Tab>* tabs = nullptr;    // the tab bar, left to right
 	Tab tab = Tab::all();
 	Filter filter = Filter::All;
+	std::string_view genre;                     // genre filter, empty when none
 	SortKey sort = SortKey::Name;
 	ViewMode mode = ViewMode::Grid;
 };

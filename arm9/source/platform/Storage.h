@@ -2,6 +2,7 @@
 
 #include "core/Config.h"
 #include "core/Cover.h"
+#include "core/Metadata.h"
 #include "core/Thumbs.h"
 #include "core/LibraryCache.h"
 #include "core/UserData.h"
@@ -24,6 +25,9 @@ bool saveUserData(const UserData& userData);
 
 // Box art for a ROM from covers/ (written by tools/fetch_covers.py); nullopt when missing or invalid.
 std::optional<Cover> loadCover(const std::string& romPath);
+
+// metadata.ini (see core/Metadata.h); empty when there is none.
+MetadataMap loadMetadata();
 
 // Opens thumbs.bin (see core/Thumbs.h) and reads its index; the file stays open for readThumb().
 bool openThumbs(std::vector<ThumbEntry>& entries);

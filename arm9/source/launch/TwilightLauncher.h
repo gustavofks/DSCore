@@ -14,4 +14,8 @@ LaunchError launchViaTwilight(const std::string& romPath, int* loaderCode);
 
 const char* describe(LaunchError error);
 
+// Puts back the settings.ini values the last launch changed for itself only (see temporaryKeys()).
+// Call at startup.
+void restoreTwilightSettings();
+
 } // namespace dscore

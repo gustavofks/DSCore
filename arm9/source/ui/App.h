@@ -88,11 +88,12 @@ private:
 	Config& config_;
 	const Theme* theme_ = &builtInThemes()[0];
 	std::vector<Tab> tabs_; // tab bar for the current library
+	std::vector<std::string> genres_; // genres in the library, for the Genre row of the menu
 	std::vector<size_t> view_;
 	mutable IconCache icons_; // drawing is const but warms the cache
 	mutable ThumbCache thumbs_;
 	enum MenuRow {
-		kFilterRow, kSortRow, kViewRow, kGridArtRow, kThemeRow, kSoundRow, kConsolesRow, kRandomRow, kRebuildRow, kCloseRow,
+		kFilterRow, kGenreRow, kSortRow, kViewRow, kGridArtRow, kThemeRow, kSoundRow, kConsolesRow, kRandomRow, kRebuildRow, kCloseRow,
 		kMenuRows
 	};
 	enum class MenuPage : uint8_t { Main, Consoles };

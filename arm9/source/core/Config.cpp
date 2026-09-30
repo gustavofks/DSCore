@@ -8,7 +8,7 @@ namespace dscore {
 
 namespace {
 
-constexpr uint32_t kSortKeyCount = 4;
+constexpr uint32_t kSortKeyCount = 5;
 constexpr uint32_t kViewModeCount = 2;
 
 // Tabs of older versions that are now a filter: the index of a fixed tab (0.2) or its id (0.3).
@@ -57,6 +57,7 @@ std::string Config::serialize() const {
 	std::string out = "[DSCORE]\n";
 	out += "TAB = " + tabId(tab) + "\n";
 	out += std::string("FILTER = ") + filterId(filter) + "\n";
+	out += "GENRE = " + genre + "\n";
 	out += "SORT = " + std::to_string(int(sort)) + "\n";
 	out += "VIEW = " + std::to_string(int(view)) + "\n";
 	out += "SELECTED = " + selectedPath + "\n";
@@ -77,6 +78,7 @@ Config Config::parse(std::string_view ini) {
 		const bool isNumber = parseIniUint(value, number);
 		if (key == "TAB") legacy = parseTab(value, config.tab);
 		else if (key == "FILTER") hasFilter = filterFromId(value, config.filter);
+		else if (key == "GENRE") config.genre = std::string(value);
 		else if (key == "SORT" && isNumber && number < kSortKeyCount) config.sort = SortKey(number);
 		else if (key == "VIEW" && isNumber && number < kViewModeCount) config.view = ViewMode(number);
 		else if (key == "SELECTED") config.selectedPath = std::string(value);

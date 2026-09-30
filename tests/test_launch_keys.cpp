@@ -32,7 +32,9 @@ TEST_CASE("systemForPath uses the extension, ignoring case") {
 	CHECK(isSystem("sd:/roms/SNES/Super Metroid.sfc", System::Snes));
 	CHECK(isSystem("sd:/roms/SNES/Zelda.SMC", System::Snes));
 	CHECK(isSystem("sd:/roms/A26/Pitfall!.a26", System::Atari2600));
-	CHECK_FALSE(systemForPath("sd:/roms/MD/Sonic.gen", system)); // not launchable yet
+	CHECK(isSystem("sd:/roms/MD/Sonic.gen", System::MegaDrive));
+	CHECK(isSystem("sd:/roms/MD/Sonic the Hedgehog (USA, Europe).md", System::MegaDrive));
+	CHECK_FALSE(systemForPath("sd:/roms/MD/Sonic.smd", system)); // interleaved dumps are not supported
 }
 
 namespace {
@@ -104,14 +106,53 @@ TEST_CASE("relaunchKeys boots the console's emulator with the ROM as argument") 
 	CHECK(bootstrapKeys("sd:/roms/GB/Tetris.gb").empty());
 }
 
-TEST_CASE("twilightEmulator names the emulator main.srldr boots") {
-	CHECK(std::string(twilightEmulator(System::Gbc)) == "sd:/_nds/TWiLightMenu/emulators/gameyob.nds");
-	CHECK(std::string(twilightEmulator(System::Nes)) == "sd:/_nds/TWiLightMenu/emulators/nestwl.nds");
-	CHECK(std::string(twilightEmulator(System::GameGear)) == "sd:/_nds/TWiLightMenu/emulators/S8DS.nds");
-	CHECK(std::string(twilightEmulator(System::Atari2600)) == "sd:/_nds/TWiLightMenu/emulators/StellaDS.nds");
-	CHECK(std::string(twilightEmulator(System::Snes)) == "sd:/_nds/TWiLightMenu/emulators/SNEmulDS.srl");
-	CHECK(twilightEmulator(System::Nds) == nullptr);
-	CHECK(twilightEmulator(System::Gba) == nullptr);
+TEST_CASE("emulatorFor names the emulator each game needs") {
+	CHECK(std::string(emulatorFor("sd:/roms/GBC/Zelda.gbc")) == "sd:/_nds/TWiLightMenu/emulators/gameyob.nds");
+	CHECK(std::string(emulatorFor("sd:/roms/NES/Metroid.nes")) == "sd:/_nds/TWiLightMenu/emulators/nestwl.nds");
+	CHECK(std::string(emulatorFor("sd:/roms/GG/Sonic.gg")) == "sd:/_nds/TWiLightMenu/emulators/S8DS.nds");
+	CHECK(std::string(emulatorFor("sd:/roms/A26/Pitfall!.a26")) == "sd:/_nds/TWiLightMenu/emulators/StellaDS.nds");
+	CHECK(std::string(emulatorFor("sd:/roms/SNES/Mario.sfc")) == "sd:/_nds/TWiLightMenu/emulators/SNEmulDS.srl");
+	CHECK(std::string(emulatorFor("sd:/roms/GBA/Metroid.gba")) == "sd:/_nds/GBARunner2_arm7dldi_dsi.nds");
+	CHECK(std::string(emulatorFor("sd:/roms/MD/Sonic.gen", 512 * 1024)) == "sd:/_nds/TWiLightMenu/emulators/jEnesisDS.nds");
+	CHECK(std::string(emulatorFor("sd:/roms/MD/SF2.gen", 5 * 1024 * 1024)) ==
+		"sd:/_nds/TWiLightMenu/emulators/PicoDriveTWL.nds");
+	CHECK(emulatorFor("sd:/roms/NDS/Game.nds") == nullptr);
+}
+
+TEST_CASE(".gen games up to 3 MB run in jEnesisDS from a RAM drive") {
+	const auto keys = relaunchKeys("sd:/roms/MD/Sonic.gen", false, kJenesisMaxSize);
+	CHECK(valueOf(keys, "LAUNCH_TYPE") == "1");
+	CHECK(valueOf(keys, "HOMEBREW_BOOTSTRAP") == "1");
+	CHECK(valueOf(keys, "HOMEBREW_ARG") == "");
+	CHECK(valueOf(keys, "SHOW_MDGEN") == "<missing>");
+	const auto bootstrap = bootstrapKeys("sd:/roms/MD/Sonic.GEN", kJenesisMaxSize);
+	CHECK(valueOf(bootstrap, "NDS_PATH") == "sd:/_nds/TWiLightMenu/emulators/jEnesisDS.nds");
+	CHECK(valueOf(bootstrap, "HOMEBREW_ARG") == "fat:/ROM.BIN");
+	CHECK(valueOf(bootstrap, "RAM_DRIVE_PATH") == "sd:/roms/MD/Sonic.GEN");
+	CHECK(temporaryKeys("sd:/roms/MD/Sonic.gen", kJenesisMaxSize).empty());
+}
+
+TEST_CASE(".md games run in PicoDriveTWL at any size") {
+	// nds-bootstrap-hb only builds jEnesisDS's RAM drive from files named .gen (hb/arm9/source/main.cpp).
+	const auto keys = relaunchKeys("sd:/roms/MD/Sonic The Hedgehog (USA, Europe).md", false, 512 * 1024);
+	CHECK(valueOf(keys, "LAUNCH_TYPE") == "10");
+	CHECK(valueOf(keys, "HOMEBREW_ARG") == "sd:/roms/MD/Sonic The Hedgehog (USA, Europe).md");
+	CHECK(valueOf(keys, "SHOW_MDGEN") == "1");
+	CHECK(bootstrapKeys("sd:/roms/MD/Sonic The Hedgehog (USA, Europe).md", 512 * 1024).empty());
+	CHECK(std::string(emulatorFor("sd:/roms/MD/Sonic.md", 512 * 1024)) ==
+		"sd:/_nds/TWiLightMenu/emulators/PicoDriveTWL.nds");
+	CHECK(temporaryKeys("sd:/roms/MD/Sonic.md", 512 * 1024) == std::vector<std::string>{"SHOW_MDGEN"});
+}
+
+TEST_CASE("larger Mega Drive games run in PicoDriveTWL with SHOW_MDGEN changed for that launch") {
+	const uint32_t size = kJenesisMaxSize + 1;
+	const auto keys = relaunchKeys("sd:/roms/MD/Super Street Fighter II.gen", false, size);
+	CHECK(valueOf(keys, "LAUNCH_TYPE") == "10");
+	CHECK(valueOf(keys, "HOMEBREW_ARG") == "sd:/roms/MD/Super Street Fighter II.gen");
+	CHECK(valueOf(keys, "SHOW_MDGEN") == "1");
+	CHECK(bootstrapKeys("sd:/roms/MD/Super Street Fighter II.gen", size).empty());
+	CHECK(temporaryKeys("sd:/roms/MD/Super Street Fighter II.gen", size) == std::vector<std::string>{"SHOW_MDGEN"});
+	CHECK(temporaryKeys("sd:/roms/GBA/Metroid.gba", size).empty());
 }
 
 TEST_CASE("relaunchKeys is empty for unsupported files") {

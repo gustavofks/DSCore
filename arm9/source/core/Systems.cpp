@@ -27,11 +27,12 @@ struct Extension {
 	System system;
 };
 
-// The extensions TWiLight Menu++ v25.10.0's ROM browser hands to each emulator.
+// The extensions TWiLight Menu++ v25.10.0's ROM browser hands to each emulator, plus No-Intro's .md.
 constexpr Extension kExtensions[] = {
 	{".nds", System::Nds}, {".gba", System::Gba}, {".gb", System::Gb}, {".sgb", System::Gb}, {".gbc", System::Gbc},
 	{".nes", System::Nes}, {".fds", System::Nes}, {".sms", System::Sms}, {".gg", System::GameGear},
-	{".sfc", System::Snes}, {".smc", System::Snes}, {".a26", System::Atari2600},
+	{".sfc", System::Snes}, {".smc", System::Snes}, {".a26", System::Atari2600}, {".gen", System::MegaDrive},
+	{".md", System::MegaDrive},
 };
 
 } // namespace

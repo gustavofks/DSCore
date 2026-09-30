@@ -211,6 +211,7 @@ int main(int argc, char** argv) {
 	showMessage(screens, "DSCore", {"Loading..."}, "", {});
 	fadeIn(kFadeFrames);
 	storage::ensureDataDir();
+	restoreTwilightSettings();
 
 	std::string log = std::string("DSCore ") + kVersion + " boot\n";
 	Config config = storage::loadConfig();
@@ -218,6 +219,9 @@ int main(int argc, char** argv) {
 	messageTheme = &findTheme(themes, config.theme);
 	UserData userData = storage::loadUserData();
 	LibraryData library = loadLibrary(screens, log);
+	const MetadataMap metadata = storage::loadMetadata();
+	log += "metadata: " + std::to_string(applyMetadata(metadata, library.games)) + " of " +
+	       std::to_string(metadata.size()) + " entries match\n";
 	App app(library, userData, config);
 	app.setThemes(themes);
 	app.seedRandom(uint32_t(time(nullptr)) ^ elapsedMs());
@@ -260,6 +264,7 @@ int main(int argc, char** argv) {
 		if (app.takeRebuildRequest()) {
 			std::string rebuildLog = "rebuild\n";
 			library = loadLibrary(screens, rebuildLog, true);
+			applyMetadata(storage::loadMetadata(), library.games);
 			storage::appendLog(rebuildLog);
 			app.libraryChanged();
 		}

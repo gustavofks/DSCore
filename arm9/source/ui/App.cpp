@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "core/Metadata.h"
 #include "ui/Keyboard.h"
 #include "ui/Layout.h"
 #include "ui/Navigation.h"
@@ -192,6 +193,7 @@ BrowserState App::state() const {
 	s.tabs = &tabs_;
 	s.tab = config_.tab;
 	s.filter = config_.filter;
+	s.genre = config_.genre;
 	s.sort = config_.sort;
 	s.mode = config_.view;
 	s.query = query_;
@@ -201,7 +203,7 @@ BrowserState App::state() const {
 // Recomputes the visible games and keeps keepPath under the cursor when it is still listed; otherwise
 // the cursor goes to the first game or stays at the same position, clamped.
 void App::rebuildView(const std::string& keepPath, Missing missing) {
-	view_ = libraryView(library_.games, userData_, config_.tab, config_.filter, config_.sort, query_);
+	view_ = libraryView(library_.games, userData_, config_.tab, config_.filter, config_.sort, query_, config_.genre);
 	size_t cursor = missing == Missing::First ? 0 : std::min(cursor_, view_.empty() ? 0 : view_.size() - 1);
 	for (size_t i = 0; i < view_.size(); ++i) {
 		if (library_.games[view_[i]].path == keepPath) {
@@ -218,8 +220,14 @@ void App::rebuildView(const std::string& keepPath, Missing missing) {
 	redraw_ = true;
 }
 
-// Recomputes the tab bar; a saved tab whose console has no games left falls back to All.
+// Recomputes the tab bar and the genre list; a saved tab whose console has no games left falls back to
+// All, and a saved genre that no game has any more is cleared.
 void App::refreshTabs() {
+	genres_ = genresOf(library_.games);
+	if (!config_.genre.empty() && std::find(genres_.begin(), genres_.end(), config_.genre) == genres_.end()) {
+		config_.genre.clear();
+		configChanged_ = true;
+	}
 	tabs_ = availableTabs(library_.games, config_.hiddenSystems);
 	if (std::find(tabs_.begin(), tabs_.end(), config_.tab) != tabs_.end()) return;
 	config_.tab = Tab::all();
@@ -268,6 +276,7 @@ std::vector<MenuItem> App::menuItems() const {
 	}
 	std::vector<MenuItem> items(kMenuRows);
 	items[kFilterRow] = {"Show", filterLabel(config_.filter)};
+	items[kGenreRow] = {"Genre", genres_.empty() ? "-" : config_.genre.empty() ? "All" : config_.genre};
 	items[kSortRow] = {"Sort by", sortKeyLabel(config_.sort)};
 	items[kViewRow] = {"View", config_.view == ViewMode::Grid ? "Grid" : "List"};
 	items[kGridArtRow] = {"Grid art", config_.gridCovers ? "Box art" : "Icons"};
@@ -333,6 +342,20 @@ void App::activateMenuRow(int row, int direction) {
 			configChanged_ = true;
 			rebuildView(currentPath);
 			break;
+		case kGenreRow: {
+			if (genres_.empty()) break;
+			// Cycles through "All" (index 0) and each genre.
+			const int count = int(genres_.size()) + 1;
+			int index = 0;
+			for (int i = 0; i < int(genres_.size()); ++i) {
+				if (genres_[size_t(i)] == config_.genre) index = i + 1;
+			}
+			index = ((index + direction) % count + count) % count;
+			config_.genre = index == 0 ? std::string() : genres_[size_t(index - 1)];
+			configChanged_ = true;
+			rebuildView(currentPath);
+			break;
+		}
 		case kSortRow:
 			config_.sort = stepSortKey(config_.sort, direction);
 			configChanged_ = true;

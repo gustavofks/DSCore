@@ -55,10 +55,11 @@ else
 
 DEPENDS := $(OFILES:.o=.d)
 
-# The sources that show kVersion (core/Version.h) are rebuilt when VERSION changes.
-main.o Views.o: ../../VERSION
-
 $(OUTPUT).elf: $(OFILES)
+
+# The sources that show kVersion (core/Version.h) are rebuilt when VERSION changes. (After the .elf
+# rule, which must stay the default goal.)
+main.o Views.o: ../../VERSION
 
 # load_bin.h / bootstub_bin.h must exist before any source that includes them is compiled.
 $(filter-out $(addsuffix .o,$(BINFILES)),$(OFILES)): $(addsuffix .o,$(BINFILES))

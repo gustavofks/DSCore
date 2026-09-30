@@ -12,8 +12,12 @@ removed.
 
 - Library of games found anywhere under `sd:/roms`, recognized by extension: DS (`.nds`), GBA
   (`.gba`), Game Boy (`.gb`, `.sgb`), Game Boy Color (`.gbc`), NES (`.nes`, `.fds`), Master System
-  (`.sms`), Game Gear (`.gg`), Super Nintendo (`.sfc`, `.smc`) and Atari 2600 (`.a26`). Games of the
+  (`.sms`), Game Gear (`.gg`), Super Nintendo (`.sfc`, `.smc`), Mega Drive (`.md`, `.gen`) and Atari 2600 (`.a26`). Games of the
   other consoles run in the emulators TWiLight Menu++ ships in `sd:/_nds/TWiLightMenu/emulators`.
+  Mega Drive games named `.gen` and up to 3 MB run in jEnesisDS; `.md` files and larger games run in
+  PicoDriveTWL (nds-bootstrap only hands `.gen` files to jEnesisDS). For PicoDriveTWL, DSCore sets
+  TWiLight's Mega Drive emulator setting for the launch and puts it back on its next start.
+  In Game Boy games, leave GameYob with "Quit to Launcher": its "Exit" opens GameYob's own file list.
 - Clean titles: the full DS banner title and publisher, or the file name without region tags,
   release numbers and site names.
 - Box art on the details screen and as thumbnails in the grid, downloaded on a PC with
@@ -23,6 +27,8 @@ removed.
 - Tabs for all games and for each console with at least one game (consoles can be hidden), filters
   (all, favorites, played, not played, Portuguese) and sorting by name, recent, play count or
   system, in a grid or a list.
+- Genres, release years and developers from `tools/fetch_metadata.py`, with a genre filter and a
+  sort by year.
 - Portuguese games are recognized by tags such as `(BR)`, `(PT)` or `(En,Pt)` in the file name, or a
   folder named `br`, and marked with a green "BR" badge.
 - Search by name with an on-screen keyboard.
@@ -41,7 +47,7 @@ removed.
 | B | Clear the search |
 | L / R | Previous / next tab |
 | SELECT | Next filter |
-| START | Options: filter, sort order, view, grid art, theme, sounds, consoles, random game, rebuild library |
+| START | Options: filter, genre, sort order, view, grid art, theme, sounds, consoles, random game, rebuild library |
 | Touch | Tap a game to select it, tap it again to play; tap a tab to open it; tap the filter or the sort order at the bottom to change it |
 | Power button | Return to the system menu |
 
@@ -63,9 +69,19 @@ A TWiLight Menu++ update replaces `dsimenu.srldr`; copy DSCore again afterwards.
 To try DSCore without installing it, run `tools\deploy.ps1 -Target E:\ -Mode app` and open
 `dscore.nds` from TWiLight Menu++'s file browser.
 
+## With the SD card in the PC
+
+One command backs up the saves, downloads box art for new games and updates genres and years:
+
+```powershell
+python tools\sync.py E:\
+```
+
+The sections below describe each step; `--no-backup`, `--no-covers` and `--no-metadata` skip one.
+
 ## Box art
 
-With the SD card in the PC, run:
+To run only this step:
 
 ```powershell
 python tools\fetch_covers.py E:\
@@ -75,6 +91,19 @@ It identifies each game (by game code for DS and GBA, by CRC32 for the other con
 cover (DS from GameTDB, the rest from libretro-thumbnails), scales it for the DSi and saves it to `sd:/_nds/DSCore/covers`. Only the Python
 standard library is needed. Covers already present are skipped; `--force` downloads them again and
 `--twilight` also saves the original images where TWiLight Menu++ looks for box art.
+
+## Genres and years
+
+```powershell
+python tools\fetch_metadata.py E:\
+```
+
+It writes `sd:/_nds/DSCore/metadata.ini` with the genre, release year, developer and player count of
+each game: DS games from GameTDB, the other consoles from libretro-database. Genres are grouped into a
+short list (Action, Platform, RPG, Racing...). On the DSi, pick a genre under START > Genre, sort by
+year, and see genre and year on the details screen. The file is plain text, one section per ROM file
+name; add `locked = 1` to a section you edit by hand and new runs leave it alone. Other programs can
+write the same format (see `arm9/source/core/Metadata.h`).
 
 ## Save backups
 
@@ -126,6 +155,7 @@ them, and `-Data` to delete DSCore's own files in `sd:/_nds/DSCore`.
 | `sd:/_nds/DSCore/userdata.ini` | Favorites and play history |
 | `sd:/_nds/DSCore/config.ini` | Last tab, filter, sort order, view, theme, hidden consoles and selected game |
 | `sd:/_nds/DSCore/covers/` | Box art from `tools/fetch_covers.py` |
+| `sd:/_nds/DSCore/metadata.ini` | Genres, years and developers from `tools/fetch_metadata.py` |
 | `sd:/_nds/DSCore/thumbs.bin` | Grid thumbnails of the box art, rebuilt by every run of `tools/fetch_covers.py` |
 | `sd:/_nds/DSCore/themes/` | Your themes |
 | `sd:/_nds/DSCore/log.txt` | Timings of the last start |

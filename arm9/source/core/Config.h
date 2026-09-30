@@ -13,6 +13,7 @@ enum class ViewMode : uint8_t { Grid, List };
 struct Config {
 	Tab tab = Tab::all();
 	Filter filter = Filter::All;
+	std::string genre;         // only games of this genre (see core/Metadata.h); empty = every genre
 	SortKey sort = SortKey::Name;
 	ViewMode view = ViewMode::Grid;
 	std::string selectedPath; // game under the cursor
