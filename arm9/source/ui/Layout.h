@@ -31,14 +31,19 @@ constexpr int kListRowH = 16;
 constexpr int kListRows = kContentH / kListRowH;
 
 // Options menu (bottom screen).
-constexpr int kMenuTop = 28;
-constexpr int kMenuRowH = 24;
+constexpr int kMenuTop = 24;
+constexpr int kMenuRowH = 20;
+constexpr int kMenuVisibleRows = (kScreenH - kFooterH - kMenuTop) / kMenuRowH;
 
 // Tab bar for labels of the given widths in pixels. Tabs share the screen width evenly when every label
 // fits that; otherwise each gets its label width plus padding, and when even that is too wide the bar
 // scrolls to keep the active tab in view (rects may then lie partly or wholly off screen).
 std::vector<Rect> tabRects(const std::vector<int>& labelWidths, int active);
-Rect menuRowRect(int row);
+// First menu row on screen: the list scrolls to keep selected in view.
+int menuFirstRow(int selected, int rows);
+Rect menuRowRect(int slot); // slot 0..kMenuVisibleRows-1 on screen
+Rect footerFilterRect(); // footer labels that cycle the filter and the sort order when touched
+Rect footerSortRect();
 Rect gridCellRect(int slot); // slot 0..kGridPerPage-1 on the current page
 Rect listRowRect(int row);
 
@@ -46,7 +51,7 @@ Rect listRowRect(int row);
 int tabAt(const std::vector<Rect>& tabs, int x, int y);
 int gridSlotAt(int x, int y);
 int listRowAt(int x, int y);
-int menuRowAt(int x, int y, int rows);
+int menuRowAt(int x, int y, int selected, int rows); // menu row under (x, y) with the list scrolled for selected
 
 } // namespace layout
 

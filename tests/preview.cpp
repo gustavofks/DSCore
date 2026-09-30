@@ -1,16 +1,20 @@
 // Host preview: builds the library from real ROM folders with the same code the DS runs, then writes
 // both screens for a few UI states as PNG files (top screen above the bottom one).
 //
-// Usage: build/preview <out-dir> <twilight-extras-dir> <rom-dir>...
+// Usage: build/preview <out-dir> <userdata.ini> <covers-dir> <rom-dir>...
+// Run it from a folder where "sd:" leads to the SD card copy, so paths match the ones on the DS.
 
 #include <cstdio>
 #include <string>
 #include <vector>
 
 #include "common/lodepng.h"
+#include "core/Cover.h"
+#include "core/LaunchKeys.h"
 #include "core/LibraryScan.h"
 #include "platform/FileIo.h"
 #include "platform/RomFiles.h"
+#include "platform/Storage.h"
 #include "ui/App.h"
 #include "ui/Keyboard.h"
 #include "ui/Layout.h"
@@ -46,13 +50,14 @@ void writePng(const std::string& path, const std::vector<uint16_t>& top, const s
 } // namespace
 
 int main(int argc, char** argv) {
-	if (argc < 4) {
-		std::fprintf(stderr, "usage: %s <out-dir> <twilight-extras-dir> <rom-dir>...\n", argv[0]);
+	if (argc < 5) {
+		std::fprintf(stderr, "usage: %s <out-dir> <userdata.ini> <covers-dir> <rom-dir>...\n", argv[0]);
 		return 1;
 	}
 	const std::string outDir = argv[1];
-	const std::string extras = argv[2];
-	const std::vector<std::string> roots(argv + 3, argv + argc);
+	const std::string userDataPath = argv[2];
+	const std::string coversDir = argv[3];
+	const std::vector<std::string> roots(argv + 4, argv + argc);
 
 	LibraryData library;
 	applyScan(library, listRomFiles(roots), [](const std::string& path, GameEntry& game, std::optional<NdsIcon>& icon) {
@@ -60,73 +65,103 @@ int main(int argc, char** argv) {
 	});
 	std::printf("%zu games, %zu icons\n", library.games.size(), library.icons.size());
 
-	UserData userData;
-	std::string recent, times;
-	readFile(extras + "/recentlyplayed.ini", recent);
-	readFile(extras + "/timesplayed.ini", times);
-	userData.importTwilightHistory(recent, times);
-	if (!library.games.empty()) userData.toggleFavorite(library.games[0].path);
-	if (!library.games.empty()) userData.recordLaunch(library.games[0].path, 1790380800);
+	std::string ini;
+	readFile(userDataPath, ini);
+	UserData userData = UserData::parse(ini);
 
 	std::vector<uint16_t> top(kW * kH), bottom(kW * kH);
 	Canvas topCanvas(top.data(), kW, kH), bottomCanvas(bottom.data(), kW, kH);
+	// Loads what main.cpp's CoverLoader would for the selected game, then draws both screens.
 	auto shot = [&](App& app, const std::string& name) {
+		if (const GameEntry* game = app.selected()) {
+			std::string data;
+			std::optional<Cover> cover;
+			if (readFile(coversDir + "/" + coverFileName(game->path), data)) {
+				cover = decodeCover(reinterpret_cast<const uint8_t*>(data.data()), data.size());
+			}
+			app.setCover(game->path, std::move(cover));
+			bool hasSave = false;
+			for (const std::string& save : saveFileCandidates(game->path)) hasSave = hasSave || fileExists(save);
+			app.setHasSave(game->path, hasSave);
+		}
 		app.drawTop(topCanvas);
 		app.drawBottom(bottomCanvas);
 		writePng(outDir + "/" + name + ".png", top, bottom);
 	};
+	std::vector<ThumbEntry> thumbs;
+	const bool hasThumbs = storage::openThumbs(thumbs);
+	std::printf("%zu thumbnails\n", thumbs.size());
+	auto prepare = [&](App& app) {
+		app.setThemes(builtInThemes());
+		if (hasThumbs) app.setThumbSource(thumbs, storage::readThumb);
+	};
+	auto pathOf = [&](const std::string& needle) {
+		for (const GameEntry& game : library.games) {
+			if (game.path.find(needle) != std::string::npos) return game.path;
+		}
+		return std::string();
+	};
 
 	Config config;
+	config.selectedPath = pathOf("HeartGold");
 	App app(library, userData, config);
-	shot(app, "1-grid");
-	for (int i = 0; i < 6; ++i) app.handle(Action::Right);
-	shot(app, "2-grid-moved");
-	app.handle(Action::NextTab);
-	shot(app, "3-favorites");
-	app.handle(Action::NextTab);
-	app.handle(Action::NextTab);
-	shot(app, "4-gba");
-	app.handle(Action::ToggleView);
-	app.handle(Action::NextTab);
-	shot(app, "5-recent-list");
+	prepare(app);
+	shot(app, "01-all-grid");
 
-	app.handle(Action::ToggleView);
-	app.handle(Action::NextTab); // back to All
+	config.selectedPath = pathOf("br/The Legend of Zelda");
+	App br(library, userData, config);
+	prepare(br);
+	shot(br, "02-br-detail");
+
+	config.selectedPath = pathOf("Star Wars - The Force Unleashed II");
+	App longTitle(library, userData, config);
+	prepare(longTitle);
+	shot(longTitle, "03-long-title");
+
+	config.selectedPath = pathOf("Metroid II");
+	config.tab = Tab::console(System::Gb);
+	App gb(library, userData, config);
+	prepare(gb);
+	shot(gb, "04-gb-tab-save");
+
+	config.selectedPath.clear();
+	config.tab = Tab::all();
+	config.filter = Filter::Portuguese;
+	config.view = ViewMode::List;
+	App portuguese(library, userData, config);
+	prepare(portuguese);
+	shot(portuguese, "05-portuguese-list");
+
+	config.filter = Filter::Played;
+	config.sort = SortKey::Recent;
+	config.view = ViewMode::Grid;
+	App recent(library, userData, config);
+	prepare(recent);
+	shot(recent, "06-played-recent");
+
+	config = Config{};
+	config.tab = Tab::console(System::Atari2600);
+	App last(library, userData, config);
+	prepare(last);
+	shot(last, "07-tabs-scrolled");
+
+	app.handle(Action::Menu);
+	shot(app, "08-menu");
+	for (int i = 0; i < 5; ++i) app.handle(Action::Down);
+	app.handle(Action::Launch);
+	shot(app, "09-menu-consoles");
+	app.handle(Action::Back);
+	app.handle(Action::Back);
+
 	app.handle(Action::Search);
 	for (char c : std::string("MARIO")) {
 		const Rect& key = keyboardKeys()[size_t(keyIndexFor(c))].rect;
 		app.handle(Action::Tap, key.x + 2, key.y + 2);
 	}
-	shot(app, "7-search");
-	app.handle(Action::Menu); // START finishes the search
-	shot(app, "8-search-results");
-	app.handle(Action::Back);
-	app.setThemes(builtInThemes());
-	app.handle(Action::Menu);
-	app.handle(Action::Down);
-	app.handle(Action::Down);
-	app.handle(Action::Right); // next theme
-	shot(app, "9-menu-light");
-	app.handle(Action::Back);
-
-	// Every console present: the tab bar no longer fits and scrolls with the active tab.
-	LibraryData many;
-	for (int s = 0; s < kSystemCount; ++s) {
-		for (int i = 0; i < 4; ++i) {
-			const std::string title = std::string(systemInfo(System(s)).name) + " " + std::to_string(i + 1);
-			many.games.push_back({"sd:/roms/" + std::string(systemInfo(System(s)).id) + "/" + title, title, System(s), "", 262144, -1});
-		}
-	}
-	UserData noHistory;
-	Config manyConfig;
-	App manyApp(many, noHistory, manyConfig);
-	for (int i = 0; i < 6; ++i) manyApp.handle(Action::NextTab);
-	shot(manyApp, "10-systems-snes");
-	for (int i = 0; i < 5; ++i) manyApp.handle(Action::NextTab);
-	shot(manyApp, "11-systems-end");
+	shot(app, "10-search");
 
 	drawMessageScreen(topCanvas, builtInThemes()[0], "DSCore", {"Loading library..."});
-	drawMessageScreen(bottomCanvas, builtInThemes()[0], "Indexing games", {"42 / 324", "Super Mario 64 DS"});
-	writePng(outDir + "/6-indexing.png", top, bottom);
+	drawMessageScreen(bottomCanvas, builtInThemes()[0], "Indexing games", {"42 / 391", "Super Mario 64 DS"});
+	writePng(outDir + "/11-indexing.png", top, bottom);
 	return 0;
 }

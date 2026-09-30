@@ -25,8 +25,28 @@ TEST_CASE("Config round-trips and ignores invalid values") {
 
 	CHECK(config.serialize().find("TAB = gba\n") != std::string::npos);
 	CHECK(Config::parse("[DSCORE]\nTAB = 3\n").tab == Tab::console(System::Gba)); // index from older versions
-	CHECK(Config::parse("[DSCORE]\nTAB = 4\n").tab == Tab::recent());
 	CHECK(Config::parse("[DSCORE]\nTAB = snes\n").tab == Tab::console(System::Snes));
+	CHECK(copy.filter == Filter::All);
+
+	// Favorites and Recent were tabs before 0.4; they become a filter (and a sort order).
+	Config old = Config::parse("[DSCORE]\nTAB = favorites\nSORT = 2\n");
+	CHECK(old.tab == Tab::all());
+	CHECK(old.filter == Filter::Favorites);
+	CHECK(old.sort == SortKey::MostPlayed);
+	old = Config::parse("[DSCORE]\nTAB = 4\nSORT = 0\n");
+	CHECK(old.tab == Tab::all());
+	CHECK(old.filter == Filter::Played);
+	CHECK(old.sort == SortKey::Recent);
+	CHECK(Config::parse("[DSCORE]\nTAB = 1\n").filter == Filter::Favorites);
+	CHECK(Config::parse("[DSCORE]\nTAB = recent\nFILTER = portuguese\n").filter == Filter::Portuguese);
+
+	Config hidden;
+	hidden.hiddenSystems = (1u << int(System::Gb)) | (1u << int(System::Atari2600));
+	hidden.filter = Filter::NotPlayed;
+	const Config hiddenCopy = Config::parse(hidden.serialize());
+	CHECK(hidden.serialize().find("HIDDEN = gb,a26\n") != std::string::npos);
+	CHECK(hiddenCopy.hiddenSystems == hidden.hiddenSystems);
+	CHECK(hiddenCopy.filter == Filter::NotPlayed);
 
 	const Config bad = Config::parse("[DSCORE]\nTAB = 9\nSORT = x\nVIEW = 1\n");
 	CHECK(bad.tab == Tab::all());

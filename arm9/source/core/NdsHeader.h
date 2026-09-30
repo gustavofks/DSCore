@@ -36,8 +36,8 @@ uint32_t arm9EntryFileOffset(const NdsHeaderInfo& info);
 // arm9Start holds kArm9StartSize bytes read at arm9EntryFileOffset().
 bool isHomebrew(const NdsHeaderInfo& info, const uint8_t* arm9Start);
 
-// First line of the banner title in lang. Empty when the banner is shorter than kBannerTitlesEnd,
-// has version 0, or the title is empty.
-std::string bannerTitle(const uint8_t* banner, size_t len, BannerLanguage lang);
+// Banner title text in lang, every line (usually title lines, then the publisher). Empty when the banner
+// is shorter than kBannerTitlesEnd, has version 0, or the title is empty.
+std::string bannerText(const uint8_t* banner, size_t len, BannerLanguage lang);
 
 } // namespace dscore

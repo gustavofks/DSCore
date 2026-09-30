@@ -56,12 +56,8 @@ std::string App::handle(Action action, int touchX, int touchY) {
 		case Action::NextTab:
 			switchTab(stepTab(tabs_, config_.tab, action == Action::NextTab ? 1 : -1), currentPath);
 			break;
-		case Action::ToggleView:
-			config_.view = config_.view == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
-			configChanged_ = true;
-			sound_ = Sound::Select;
-			bottomValid_ = false;
-			redraw_ = true;
+		case Action::NextFilter:
+			setFilter(stepFilter(config_.filter, 1), currentPath);
 			break;
 		case Action::Menu:
 			setMenuOpen(true);
@@ -70,6 +66,14 @@ std::string App::handle(Action action, int touchX, int touchY) {
 			const int tab = layout::tabAt(tabBarRects(tabs_, config_.tab), touchX, touchY);
 			if (tab >= 0) {
 				if (tabs_[size_t(tab)] != config_.tab) switchTab(tabs_[size_t(tab)], currentPath);
+				break;
+			}
+			if (layout::footerFilterRect().contains(touchX, touchY)) {
+				setFilter(stepFilter(config_.filter, 1), currentPath);
+				break;
+			}
+			if (layout::footerSortRect().contains(touchX, touchY)) {
+				setSort(stepSortKey(config_.sort, 1), currentPath);
 				break;
 			}
 			const int slot = config_.view == ViewMode::Grid ? layout::gridSlotAt(touchX, touchY)
@@ -92,7 +96,11 @@ void App::drawTop(Canvas& canvas) const {
 void App::drawBottom(Canvas& canvas) const {
 	const BrowserState s = state();
 	if (menuOpen_) {
-		drawMenuScreen(canvas, *theme_, menuItems(), menuRow_);
+		if (menuPage_ == MenuPage::Main) {
+			drawMenuScreen(canvas, *theme_, "Options", menuItems(), menuRow_, "Left/Right:Change A:Select B:Close");
+		} else {
+			drawMenuScreen(canvas, *theme_, "Consoles", menuItems(), menuRow_, "A:Show or hide the tab B:Back");
+		}
 		bottomValid_ = false;
 		return;
 	}
@@ -117,6 +125,18 @@ void App::drawBottom(Canvas& canvas) const {
 void App::setCover(const std::string& path, std::optional<Cover> cover) {
 	coverPath_ = path;
 	cover_ = std::move(cover);
+	const GameEntry* game = selected();
+	if (game && game->path == path) redraw_ = true;
+}
+
+void App::setThumbSource(std::vector<ThumbEntry> entries, ThumbCache::Loader loader) {
+	thumbs_.setSource(std::move(entries), std::move(loader));
+	invalidate();
+}
+
+void App::setHasSave(const std::string& path, bool hasSave) {
+	savePath_ = path;
+	hasSave_ = hasSave;
 	const GameEntry* game = selected();
 	if (game && game->path == path) redraw_ = true;
 }
@@ -163,12 +183,15 @@ BrowserState App::state() const {
 	s.library = &library_;
 	s.userData = &userData_;
 	s.icons = &icons_;
+	s.thumbs = config_.gridCovers && !thumbs_.empty() ? &thumbs_ : nullptr;
 	const GameEntry* game = selected();
 	s.cover = (cover_ && game && game->path == coverPath_) ? &*cover_ : nullptr;
+	s.hasSave = hasSave_ && game && game->path == savePath_;
 	s.view = &view_;
 	s.cursor = cursor_;
 	s.tabs = &tabs_;
 	s.tab = config_.tab;
+	s.filter = config_.filter;
 	s.sort = config_.sort;
 	s.mode = config_.view;
 	s.query = query_;
@@ -178,7 +201,7 @@ BrowserState App::state() const {
 // Recomputes the visible games and keeps keepPath under the cursor when it is still listed; otherwise
 // the cursor goes to the first game or stays at the same position, clamped.
 void App::rebuildView(const std::string& keepPath, Missing missing) {
-	view_ = libraryView(library_.games, userData_, config_.tab, config_.sort, query_);
+	view_ = libraryView(library_.games, userData_, config_.tab, config_.filter, config_.sort, query_);
 	size_t cursor = missing == Missing::First ? 0 : std::min(cursor_, view_.empty() ? 0 : view_.size() - 1);
 	for (size_t i = 0; i < view_.size(); ++i) {
 		if (library_.games[view_[i]].path == keepPath) {
@@ -197,7 +220,7 @@ void App::rebuildView(const std::string& keepPath, Missing missing) {
 
 // Recomputes the tab bar; a saved tab whose console has no games left falls back to All.
 void App::refreshTabs() {
-	tabs_ = availableTabs(library_.games);
+	tabs_ = availableTabs(library_.games, config_.hiddenSystems);
 	if (std::find(tabs_.begin(), tabs_.end(), config_.tab) != tabs_.end()) return;
 	config_.tab = Tab::all();
 	configChanged_ = true;
@@ -205,6 +228,20 @@ void App::refreshTabs() {
 
 void App::switchTab(Tab tab, const std::string& currentPath) {
 	config_.tab = tab;
+	sound_ = Sound::Select;
+	configChanged_ = true;
+	rebuildView(currentPath, Missing::First);
+}
+
+void App::setFilter(Filter filter, const std::string& currentPath) {
+	config_.filter = filter;
+	sound_ = Sound::Select;
+	configChanged_ = true;
+	rebuildView(currentPath, Missing::First);
+}
+
+void App::setSort(SortKey sort, const std::string& currentPath) {
+	config_.sort = sort;
 	sound_ = Sound::Select;
 	configChanged_ = true;
 	rebuildView(currentPath, Missing::First);
@@ -220,11 +257,24 @@ void App::select(size_t cursor) {
 }
 
 std::vector<MenuItem> App::menuItems() const {
+	if (menuPage_ == MenuPage::Consoles) {
+		std::vector<MenuItem> items;
+		for (System system : menuConsoles()) {
+			const bool hidden = config_.hiddenSystems & (1u << int(system));
+			items.push_back({systemInfo(system).name, hidden ? "Hidden" : "Shown"});
+		}
+		items.push_back({"Back", ""});
+		return items;
+	}
 	std::vector<MenuItem> items(kMenuRows);
+	items[kFilterRow] = {"Show", filterLabel(config_.filter)};
 	items[kSortRow] = {"Sort by", sortKeyLabel(config_.sort)};
 	items[kViewRow] = {"View", config_.view == ViewMode::Grid ? "Grid" : "List"};
+	items[kGridArtRow] = {"Grid art", config_.gridCovers ? "Box art" : "Icons"};
 	items[kThemeRow] = {"Theme", theme_->name};
 	items[kSoundRow] = {"Sounds", config_.sound ? "On" : "Off"};
+	items[kConsolesRow] = {"Consoles...", ""};
+	items[kRandomRow] = {"Random game", ""};
 	items[kRebuildRow] = {"Rebuild library", ""};
 	items[kCloseRow] = {"Close", ""};
 	return items;
@@ -239,19 +289,33 @@ void App::handleMenu(Action action, int touchX, int touchY) {
 			sound_ = Sound::Move;
 			break;
 		case Action::Down:
-			menuRow_ = std::min(int(kMenuRows) - 1, menuRow_ + 1);
+			menuRow_ = std::min(menuRowCount() - 1, menuRow_ + 1);
 			sound_ = Sound::Move;
 			break;
-		case Action::Left: activateMenuRow(menuRow_, -1); break;
+		case Action::Left:
 		case Action::Right:
-		case Action::Launch: activateMenuRow(menuRow_, 1); break;
+		case Action::Launch: {
+			const int direction = action == Action::Left ? -1 : 1;
+			if (menuPage_ == MenuPage::Main) activateMenuRow(menuRow_, direction);
+			else activateConsoleRow(menuRow_);
+			break;
+		}
 		case Action::Back:
-		case Action::Menu: setMenuOpen(false); break;
+		case Action::Menu:
+			if (menuPage_ == MenuPage::Consoles) {
+				menuPage_ = MenuPage::Main;
+				menuRow_ = kConsolesRow;
+				sound_ = Sound::Back;
+			} else {
+				setMenuOpen(false);
+			}
+			break;
 		case Action::Tap: {
-			const int row = layout::menuRowAt(touchX, touchY, kMenuRows);
+			const int row = layout::menuRowAt(touchX, touchY, menuRow_, menuRowCount());
 			if (row < 0) return;
 			menuRow_ = row;
-			activateMenuRow(row, 1);
+			if (menuPage_ == MenuPage::Main) activateMenuRow(row, 1);
+			else activateConsoleRow(row);
 			break;
 		}
 		default: return;
@@ -264,15 +328,22 @@ void App::activateMenuRow(int row, int direction) {
 	const GameEntry* current = selected();
 	const std::string currentPath = current ? current->path : config_.selectedPath;
 	switch (row) {
-		case kSortRow: {
-			constexpr int kSortKeys = 3;
-			config_.sort = SortKey((int(config_.sort) + kSortKeys + direction) % kSortKeys);
+		case kFilterRow:
+			config_.filter = stepFilter(config_.filter, direction);
 			configChanged_ = true;
 			rebuildView(currentPath);
 			break;
-		}
+		case kSortRow:
+			config_.sort = stepSortKey(config_.sort, direction);
+			configChanged_ = true;
+			rebuildView(currentPath);
+			break;
 		case kViewRow:
 			config_.view = config_.view == ViewMode::Grid ? ViewMode::List : ViewMode::Grid;
+			configChanged_ = true;
+			break;
+		case kGridArtRow:
+			config_.gridCovers = !config_.gridCovers;
 			configChanged_ = true;
 			break;
 		case kThemeRow: {
@@ -290,6 +361,15 @@ void App::activateMenuRow(int row, int direction) {
 			config_.sound = !config_.sound;
 			configChanged_ = true;
 			break;
+		case kConsolesRow:
+			if (direction < 0) break;
+			menuPage_ = MenuPage::Consoles;
+			menuRow_ = 0;
+			break;
+		case kRandomRow:
+			if (direction < 0) break;
+			pickRandomGame();
+			break;
 		case kRebuildRow:
 			if (direction < 0) break;
 			rebuildRequested_ = true;
@@ -301,8 +381,53 @@ void App::activateMenuRow(int row, int direction) {
 	}
 }
 
+int App::menuRowCount() const {
+	return menuPage_ == MenuPage::Main ? int(kMenuRows) : int(menuConsoles().size()) + 1; // + Back
+}
+
+std::vector<System> App::menuConsoles() const {
+	// Every console with games, hidden or not, in tab order.
+	std::vector<System> systems;
+	for (const Tab& tab : availableTabs(library_.games)) {
+		if (tab.kind == Tab::Kind::Console) systems.push_back(tab.system);
+	}
+	return systems;
+}
+
+// Consoles page: A shows or hides the console's tab; the last row goes back.
+void App::activateConsoleRow(int row) {
+	const std::vector<System> systems = menuConsoles();
+	if (row >= int(systems.size())) {
+		menuPage_ = MenuPage::Main;
+		menuRow_ = kConsolesRow;
+		sound_ = Sound::Back;
+		return;
+	}
+	sound_ = Sound::Select;
+	config_.hiddenSystems ^= 1u << int(systems[size_t(row)]);
+	configChanged_ = true;
+	const GameEntry* current = selected();
+	const std::string currentPath = current ? current->path : config_.selectedPath;
+	refreshTabs();
+	rebuildView(currentPath);
+}
+
+// Selects a random game of the current list (another one when there is a choice) and closes the menu.
+void App::pickRandomGame() {
+	if (view_.empty()) return;
+	random_ ^= random_ << 13;
+	random_ ^= random_ >> 17;
+	random_ ^= random_ << 5;
+	size_t pick = random_ % view_.size();
+	if (pick == cursor_ && view_.size() > 1) pick = (pick + 1 + random_ / 7 % (view_.size() - 1)) % view_.size();
+	setMenuOpen(false);
+	select(pick);
+	sound_ = Sound::Launch;
+}
+
 void App::setMenuOpen(bool open) {
 	menuOpen_ = open;
+	if (open) menuPage_ = MenuPage::Main;
 	sound_ = open ? Sound::Select : Sound::Back;
 	bottomValid_ = false;
 	redraw_ = true;

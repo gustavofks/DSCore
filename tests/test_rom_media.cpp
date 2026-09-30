@@ -51,20 +51,6 @@ TEST_CASE("parseGbaHeader reads the internal title and game code") {
 	CHECK_FALSE(parseGbaHeader(rom.data(), 0xAF, info));
 }
 
-TEST_CASE("titleFromFileName strips extension and No-Intro tags") {
-	CHECK(titleFromFileName("sd:/roms/GBA/Metroid Fusion (USA).gba") == "Metroid Fusion");
-	CHECK(titleFromFileName("Classic NES Series - Metroid (USA, Europe).gba") == "Classic NES Series - Metroid");
-	CHECK(titleFromFileName("sd:/roms/GBA/Alien Hominid # GBA.GBA") == "Alien Hominid # GBA");
-	CHECK(titleFromFileName("4273 - Pokemon Mystery Dungeon (US)(XenoPhobia).nds") == "4273 - Pokemon Mystery Dungeon");
-	CHECK(titleFromFileName("(Weird).gba") == "(Weird)");
-	CHECK(titleFromFileName("Legend of Zelda, The - Link's Awakening (USA, Europe) (Rev 2).gb") ==
-		"The Legend of Zelda - Link's Awakening");
-	CHECK(titleFromFileName("Legend of Zelda, The (USA) (Rev 1).nes") == "The Legend of Zelda");
-	CHECK(titleFromFileName("Bug's Life, A (USA).gbc") == "A Bug's Life");
-	CHECK(titleFromFileName("Lost World, The - Jurassic Park, The (USA).gb") == "The Lost World - Jurassic Park, The");
-	CHECK(titleFromFileName("Metal Gear Solid, Theme (USA).gbc") == "Metal Gear Solid, Theme");
-}
-
 TEST_CASE("initialsFor picks two initials that tell titles apart") {
 	CHECK(initialsFor("Metroid Zero Mission") == "MZ");
 	CHECK(initialsFor("Classic NES Series - Metroid") == "ME");       // subtitle after " - ", one word

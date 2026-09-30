@@ -55,9 +55,13 @@ TEST_CASE("App switches tabs and keeps the selection when it is listed") {
 	Config config;
 	config.selectedPath = "sd:/roms/GBA/101.gba";
 	App app(lib, data, config);
-	app.handle(Action::NextTab); // Favorites: empty
-	CHECK(config.tab == Tab::favorites());
+	app.handle(Action::NextFilter); // Favorites: empty
+	CHECK(config.filter == Filter::Favorites);
 	CHECK(app.selected() == nullptr);
+	app.handle(Action::NextFilter);
+	app.handle(Action::NextFilter);
+	app.handle(Action::NextFilter);
+	app.handle(Action::NextFilter); // back to All games
 	app.handle(Action::NextTab); // DS
 	app.handle(Action::NextTab); // GBA
 	CHECK(config.tab == Tab::console(System::Gba));
@@ -72,7 +76,6 @@ TEST_CASE("App starts a tab at its first game when the selection is not in it") 
 	Config config;
 	config.selectedPath = "sd:/roms/NDS/102.nds";
 	App app(lib, data, config);
-	app.handle(Action::NextTab); // Favorites (empty)
 	app.handle(Action::NextTab); // DS: selection is listed
 	CHECK(app.selected()->path == "sd:/roms/NDS/102.nds");
 	app.handle(Action::NextTab); // GBA: selection is not listed
@@ -88,10 +91,10 @@ TEST_CASE("App toggles favorites and reports user data changes") {
 	CHECK(data.find("sd:/roms/NDS/100.nds")->favorite);
 	CHECK(app.takeUserDataChanged());
 
-	config.tab = Tab::favorites();
+	config.filter = Filter::Favorites;
 	App favorites(lib, data, config);
 	favorites.handle(Action::Favorite);
-	CHECK(favorites.selected() == nullptr); // un-favorited game leaves the tab
+	CHECK(favorites.selected() == nullptr); // un-favorited game leaves the list
 }
 
 TEST_CASE("App reports interface sounds") {
@@ -137,18 +140,25 @@ TEST_CASE("App options menu toggles sounds") {
 	Config config;
 	App app(lib, data, config);
 	app.handle(Action::Menu);
-	for (int i = 0; i < 3; ++i) app.handle(Action::Down);
+	for (int i = 0; i < 5; ++i) app.handle(Action::Down);
 	app.handle(Action::Launch);
 	CHECK_FALSE(config.sound);
 }
 
-TEST_CASE("App toggles the view with SELECT") {
+TEST_CASE("App cycles the filter with SELECT and the footer, and the sort with the footer") {
 	const LibraryData lib = library(2, 0);
 	UserData data;
 	Config config;
 	App app(lib, data, config);
-	app.handle(Action::ToggleView);
-	CHECK(config.view == ViewMode::List);
+	app.handle(Action::NextFilter);
+	CHECK(config.filter == Filter::Favorites);
+	CHECK(app.takeConfigChanged());
+	const Rect filter = layout::footerFilterRect();
+	app.handle(Action::Tap, filter.x + 2, filter.y + 2);
+	CHECK(config.filter == Filter::Played);
+	const Rect sort = layout::footerSortRect();
+	app.handle(Action::Tap, sort.x + 2, sort.y + 2);
+	CHECK(config.sort == SortKey::Recent);
 }
 
 TEST_CASE("App options menu changes sort, view and theme and requests a rebuild") {
@@ -159,14 +169,24 @@ TEST_CASE("App options menu changes sort, view and theme and requests a rebuild"
 	app.setThemes(builtInThemes());
 	app.handle(Action::Menu);
 	CHECK(app.menuOpen());
-	CHECK(app.handle(Action::Launch).empty()); // row 0: sort
-	CHECK(config.sort == SortKey::System);
+	CHECK(app.handle(Action::Launch).empty()); // row 0: filter
+	CHECK(config.filter == Filter::Favorites);
+	app.handle(Action::Left);
+	CHECK(config.filter == Filter::All);
+
+	app.handle(Action::Down); // sort
+	app.handle(Action::Launch);
+	CHECK(config.sort == SortKey::Recent);
 	app.handle(Action::Left);
 	CHECK(config.sort == SortKey::Name);
 
 	app.handle(Action::Down); // view
 	app.handle(Action::Right);
 	CHECK(config.view == ViewMode::List);
+
+	app.handle(Action::Down); // grid art
+	app.handle(Action::Launch);
+	CHECK_FALSE(config.gridCovers);
 
 	app.handle(Action::Down); // theme
 	app.handle(Action::Right);
@@ -177,6 +197,8 @@ TEST_CASE("App options menu changes sort, view and theme and requests a rebuild"
 	CHECK(config.theme == builtInThemes().back().name);
 
 	app.handle(Action::Down); // sounds
+	app.handle(Action::Down); // consoles
+	app.handle(Action::Down); // random game
 	app.handle(Action::Down); // rebuild
 	app.handle(Action::Launch);
 	CHECK_FALSE(app.menuOpen());
@@ -207,8 +229,8 @@ TEST_CASE("App touch selects a cell, then launches it, and switches tabs") {
 	CHECK(app.selected()->path == "sd:/roms/NDS/101.nds");
 	CHECK(app.handle(Action::Tap, cell.x + 5, cell.y + 5) == "sd:/roms/NDS/101.nds");
 
-	const std::vector<Tab> tabs = {Tab::all(), Tab::favorites(), Tab::console(System::Nds), Tab::console(System::Gba), Tab::recent()};
-	const Rect gbaTab = tabBarRects(tabs, config.tab)[3];
+	const std::vector<Tab> tabs = {Tab::all(), Tab::console(System::Nds), Tab::console(System::Gba)};
+	const Rect gbaTab = tabBarRects(tabs, config.tab)[2];
 	app.handle(Action::Tap, gbaTab.x + 2, gbaTab.y + 2);
 	CHECK(config.tab == Tab::console(System::Gba));
 	CHECK(app.selected()->system == System::Gba);
@@ -357,9 +379,64 @@ TEST_CASE("App hides tabs of consoles without games and forgets a saved tab that
 	App app(lib, data, config);
 	CHECK(config.tab == Tab::all());
 	CHECK(app.takeConfigChanged());
-	app.handle(Action::NextTab); // Favorites
 	app.handle(Action::NextTab); // DS
 	CHECK(config.tab == Tab::console(System::Nds));
-	app.handle(Action::NextTab); // no GBA games: Recent
-	CHECK(config.tab == Tab::recent());
+	app.handle(Action::NextTab); // no GBA games: back to All
+	CHECK(config.tab == Tab::all());
+}
+
+TEST_CASE("App options menu hides and shows console tabs") {
+	const LibraryData lib = library(2, 2);
+	UserData data;
+	Config config;
+	config.tab = Tab::console(System::Gba);
+	App app(lib, data, config);
+	app.handle(Action::Menu);
+	for (int i = 0; i < 6; ++i) app.handle(Action::Down);
+	app.handle(Action::Launch); // Consoles...: DS, GBA, Back
+	app.handle(Action::Down);
+	app.handle(Action::Launch); // hide GBA
+	CHECK(config.hiddenSystems == (1u << int(System::Gba)));
+	CHECK(config.tab == Tab::all()); // its tab is gone
+	app.handle(Action::Launch); // show it again
+	CHECK(config.hiddenSystems == 0);
+	app.handle(Action::Back); // back to the main page
+	CHECK(app.menuOpen());
+	app.handle(Action::Back);
+	CHECK_FALSE(app.menuOpen());
+	app.handle(Action::NextTab);
+	app.handle(Action::NextTab);
+	CHECK(config.tab == Tab::console(System::Gba));
+}
+
+TEST_CASE("App options menu picks a random game from the list") {
+	const LibraryData lib = library(10, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	app.seedRandom(1234);
+	for (int round = 0; round < 5; ++round) {
+		const std::string before = app.selected()->path;
+		app.handle(Action::Menu); // remembers the last row: go back to the top first
+		for (int i = 0; i < 10; ++i) app.handle(Action::Up);
+		for (int i = 0; i < 7; ++i) app.handle(Action::Down);
+		app.handle(Action::Launch);
+		CHECK_FALSE(app.menuOpen());
+		REQUIRE(app.selected() != nullptr);
+		CHECK(app.selected()->path != before);
+	}
+}
+
+TEST_CASE("App menu scrolls and hit-tests the rows on screen") {
+	const LibraryData lib = library(1, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	app.handle(Action::Menu);
+	for (int i = 0; i < 9; ++i) app.handle(Action::Down); // last row: Close
+	const int first = layout::menuFirstRow(9, 10);
+	CHECK(first > 0);
+	const Rect close = layout::menuRowRect(9 - first);
+	app.handle(Action::Tap, close.x + 4, close.y + 4);
+	CHECK_FALSE(app.menuOpen());
 }

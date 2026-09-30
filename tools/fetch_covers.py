@@ -13,6 +13,8 @@ libretro-thumbnails uses. Games of the other consoles have no game code: their C
 instead. The file name is the last resort.
 Each cover is scaled to fit 112x112 and written to _nds/DSCore/covers/<rom file name>.bin in DSCore's
 format: "DSCV", width and height (u16 LE), then width*height DS colors (u16 LE, bit 15 set).
+Every run also rebuilds _nds/DSCore/thumbs.bin, 40x40 thumbnails of all covers for the grid (format in
+arm9/source/core/Thumbs.h).
 Only the Python standard library is used.
 """
 import os
@@ -26,6 +28,7 @@ import urllib.request
 import zlib
 
 MAX_SIZE = 112
+THUMB_SIZE = 40  # grid thumbnails, core/Thumbs.h kThumbMaxSize
 GAMETDB = "https://art.gametdb.com/ds/coverS/{region}/{code}.png"
 LIBRETRO_THUMBS = "https://raw.githubusercontent.com/libretro-thumbnails/{system}/master/Named_Boxarts/{name}.png"
 LIBRETRO_DB = "https://raw.githubusercontent.com/libretro/libretro-database/master/metadat/"
@@ -38,10 +41,13 @@ DATS = {  # system -> (thumbnail repository, No-Intro database file)
     "fds": ("Nintendo_-_Family_Computer_Disk_System", "no-intro/Nintendo%20-%20Family%20Computer%20Disk%20System.dat"),
     "sms": ("Sega_-_Master_System_-_Mark_III", "no-intro/Sega%20-%20Master%20System%20-%20Mark%20III.dat"),
     "gg": ("Sega_-_Game_Gear", "no-intro/Sega%20-%20Game%20Gear.dat"),
+    "snes": ("Nintendo_-_Super_Nintendo_Entertainment_System",
+             "no-intro/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System.dat"),
+    "a26": ("Atari_-_2600", "no-intro/Atari%20-%202600.dat"),
 }
 # The extensions DSCore recognizes (core/Systems.cpp), mapped to DATS keys.
 EXTENSIONS = {".nds": "nds", ".gba": "gba", ".gb": "gb", ".sgb": "gb", ".gbc": "gbc", ".nes": "nes", ".fds": "fds",
-              ".sms": "sms", ".gg": "gg"}
+              ".sms": "sms", ".gg": "gg", ".sfc": "snes", ".smc": "snes", ".a26": "a26"}
 DAT_MAX_AGE = 7 * 24 * 3600
 REGION_PREFERENCE = ["(USA", "(World", "(Europe"]
 # GameTDB region folder from the last letter of a DS game code.
@@ -112,8 +118,8 @@ def decode_png(data):
 
 # --- Scaling and DSCore format --------------------------------------------------------------------
 
-def fit(width, height):
-    scale = min(MAX_SIZE / width, MAX_SIZE / height, 1.0)
+def fit(width, height, limit=MAX_SIZE):
+    scale = min(limit / width, limit / height, 1.0)
     return max(1, round(width * scale)), max(1, round(height * scale))
 
 
@@ -140,6 +146,56 @@ def to_dscore(png):
     scaled = scale_box(width, height, pixels, out_w, out_h)
     body = b"".join(struct.pack("<H", 0x8000 | (b >> 3) << 10 | (g >> 3) << 5 | (r >> 3)) for r, g, b in scaled)
     return b"DSCV" + struct.pack("<HH", out_w, out_h) + body
+
+
+# --- Grid thumbnails (thumbs.bin, read by core/Thumbs.h) -------------------------------------------
+
+def read_dscore_cover(path):
+    """(width, height, [(r, g, b), ...]) from a DSCV file, 8 bits per channel."""
+    with open(path, "rb") as f:
+        data = f.read()
+    if data[:4] != b"DSCV" or len(data) < 8:
+        return None
+    width, height = struct.unpack_from("<HH", data, 4)
+    if len(data) < 8 + width * height * 2:
+        return None
+    pixels = []
+    for (c,) in struct.iter_unpack("<H", data[8:8 + width * height * 2]):
+        pixels.append(((c & 31) << 3, ((c >> 5) & 31) << 3, ((c >> 10) & 31) << 3))
+    return width, height, pixels
+
+
+def fnv1a(text):
+    value = 2166136261
+    for byte in text.encode("utf-8"):
+        value = ((value ^ byte) * 16777619) & 0xFFFFFFFF
+    return value
+
+
+def write_thumbs(covers_dir, rom_names, target):
+    """Writes thumbs.bin with a THUMB_SIZE thumbnail of every game that has a cover."""
+    thumbs = {}
+    for name in rom_names:
+        cover = os.path.join(covers_dir, name + ".bin")
+        decoded = read_dscore_cover(cover) if os.path.exists(cover) else None
+        if not decoded:
+            continue
+        width, height, pixels = decoded
+        out_w, out_h = fit(width, height, THUMB_SIZE)
+        scaled = scale_box(width, height, pixels, out_w, out_h)
+        body = b"".join(struct.pack("<H", 0x8000 | (b >> 3) << 10 | (g >> 3) << 5 | (r >> 3)) for r, g, b in scaled)
+        thumbs[fnv1a(name)] = (out_w, out_h, body)
+    keys = sorted(thumbs)
+    offset = 12 + 12 * len(keys)
+    index, bodies = [], []
+    for key in keys:
+        width, height, body = thumbs[key]
+        index.append(struct.pack("<IIBBH", key, offset, width, height, 0))
+        bodies.append(body)
+        offset += len(body)
+    with open(target, "wb") as f:
+        f.write(b"DSTH" + struct.pack("<HHI", 1, 0, len(keys)) + b"".join(index) + b"".join(bodies))
+    return len(keys)
 
 
 # --- Sources --------------------------------------------------------------------------------------
@@ -236,12 +292,14 @@ def fetch_gba(path, titles):
 
 
 def crc32s(path):
-    """CRC32 of the file, plus of the data after the 16-byte header of an iNES file (No-Intro lists both)."""
+    """CRC32 of the file, plus without the 16-byte iNES header or a 512-byte SNES copier header."""
     with open(path, "rb") as f:
         data = f.read()
     crcs = [f"{zlib.crc32(data):08X}"]
     if data[:4] == b"NES\x1a":
         crcs.append(f"{zlib.crc32(data[16:]):08X}")
+    elif path.lower().endswith((".smc", ".sfc")) and len(data) % 1024 == 512:
+        crcs.append(f"{zlib.crc32(data[512:]):08X}")
     return crcs
 
 
@@ -323,6 +381,10 @@ def main():
         print(f"Missing list: {missing_list}")
     elif os.path.exists(missing_list):
         os.remove(missing_list)
+
+    count = write_thumbs(covers_dir, [os.path.basename(path) for path, _ in roms],
+                         os.path.join(sd_root, "_nds", "DSCore", "thumbs.bin"))
+    print(f"Grid thumbnails: {count}")
 
 
 if __name__ == "__main__":

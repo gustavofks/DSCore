@@ -117,24 +117,24 @@ TEST_CASE("parseNdsHeader rejects short buffers") {
 	CHECK_FALSE(parseNdsHeader(h.data(), kNdsHeaderSize - 1, info));
 }
 
-TEST_CASE("bannerTitle returns the first line of the chosen language") {
+TEST_CASE("bannerText returns every line of the chosen language") {
 	auto b = makeBanner(1);
 	putTitle(b, BannerLanguage::English, u"Mario Kart DS\nNintendo");
-	CHECK(bannerTitle(b.data(), b.size(), BannerLanguage::English) == "Mario Kart DS");
+	CHECK(bannerText(b.data(), b.size(), BannerLanguage::English) == "Mario Kart DS\nNintendo");
 }
 
-TEST_CASE("bannerTitle decodes non-ASCII titles") {
+TEST_CASE("bannerText decodes non-ASCII titles") {
 	auto b = makeBanner(1);
-	putTitle(b, BannerLanguage::Japanese, u"マリオ\nNintendo");
-	CHECK(bannerTitle(b.data(), b.size(), BannerLanguage::Japanese) == "\xE3\x83\x9E\xE3\x83\xAA\xE3\x82\xAA");
+	putTitle(b, BannerLanguage::Japanese, u"マリオ\n");
+	CHECK(bannerText(b.data(), b.size(), BannerLanguage::Japanese) == "\xE3\x83\x9E\xE3\x83\xAA\xE3\x82\xAA");
 }
 
-TEST_CASE("bannerTitle is empty for version 0 or short banners") {
+TEST_CASE("bannerText is empty for version 0 or short banners") {
 	auto zero = makeBanner(0);
 	putTitle(zero, BannerLanguage::English, u"X");
-	CHECK(bannerTitle(zero.data(), zero.size(), BannerLanguage::English).empty());
+	CHECK(bannerText(zero.data(), zero.size(), BannerLanguage::English).empty());
 
 	auto ok = makeBanner(1);
 	putTitle(ok, BannerLanguage::English, u"X");
-	CHECK(bannerTitle(ok.data(), kBannerTitlesEnd - 1, BannerLanguage::English).empty());
+	CHECK(bannerText(ok.data(), kBannerTitlesEnd - 1, BannerLanguage::English).empty());
 }

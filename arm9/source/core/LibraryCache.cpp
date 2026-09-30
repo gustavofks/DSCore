@@ -9,7 +9,7 @@ namespace dscore {
 namespace {
 
 constexpr char kMagic[4] = {'D', 'S', 'C', 'L'};
-constexpr uint16_t kVersion = 1;
+constexpr uint16_t kVersion = 2;
 constexpr size_t kHeaderSize = 20; // magic, version, reserved, game count, icon count, checksum
 constexpr size_t kIconBytes = 512 + 16 * 2;
 
@@ -88,6 +88,8 @@ std::vector<uint8_t> encodeLibrary(const LibraryData& library) {
 		char code[4] = {0, 0, 0, 0};
 		std::memcpy(code, game.gameCode.data(), std::min<size_t>(4, game.gameCode.size()));
 		w.bytes(code, sizeof(code));
+		w.u8(game.portuguese ? 1 : 0);
+		w.str(game.publisher);
 	}
 	for (const NdsIcon& icon : library.icons) {
 		w.bytes(icon.bitmap, sizeof(icon.bitmap));
@@ -130,6 +132,8 @@ bool decodeLibrary(const uint8_t* data, size_t len, LibraryData& out) {
 		char code[4];
 		r.bytes(code, sizeof(code));
 		game.gameCode.assign(code, strnlen(code, sizeof(code)));
+		game.portuguese = (r.u8() & 1) != 0;
+		game.publisher = r.str();
 		if (int(game.system) >= kSystemCount) return false;
 		if (game.iconIndex < -1 || game.iconIndex >= int32_t(iconCount)) return false;
 		library.games.push_back(std::move(game));

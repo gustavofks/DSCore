@@ -5,11 +5,13 @@
 #include <vector>
 
 #include "common/systemdetails.h"
+#include "core/LaunchKeys.h"
 #include "core/LibraryScan.h"
 #include "core/Version.h"
 #include "launch/TwilightLauncher.h"
 #include "my_gurumeditation.h"
 #include "platform/Effects.h"
+#include "platform/FileIo.h"
 #include "platform/Power.h"
 #include "platform/RomFiles.h"
 #include "platform/Screens.h"
@@ -112,7 +114,7 @@ std::string handleInput(App& app) {
 	if (down & KEY_Y) apply(Action::Favorite);
 	if (down & KEY_L) apply(Action::PrevTab);
 	if (down & KEY_R) apply(Action::NextTab);
-	if (down & KEY_SELECT) apply(Action::ToggleView);
+	if (down & KEY_SELECT) apply(Action::NextFilter);
 	if (down & KEY_START) apply(Action::Menu);
 	if (down & KEY_TOUCH) {
 		touchPosition touch;
@@ -122,8 +124,8 @@ std::string handleInput(App& app) {
 	return launch;
 }
 
-// Loads the selected game's box art after the cursor has rested for a few frames, remembering games
-// that have none so their file is not looked up again.
+// Loads the selected game's box art and looks for its save after the cursor has rested for a few frames,
+// remembering games that have no box art so their file is not looked up again.
 class CoverLoader {
 public:
 	void update(App& app) {
@@ -136,6 +138,9 @@ public:
 		}
 		if (path.empty() || path == loaded_ || ++restingFrames_ < kCoverDelayFrames) return;
 		loaded_ = path;
+		bool hasSave = false;
+		for (const std::string& save : saveFileCandidates(path)) hasSave = hasSave || fileExists(save);
+		app.setHasSave(path, hasSave);
 		std::optional<Cover> cover;
 		if (!missing_.count(path)) {
 			cover = storage::loadCover(path);
@@ -215,6 +220,11 @@ int main(int argc, char** argv) {
 	LibraryData library = loadLibrary(screens, log);
 	App app(library, userData, config);
 	app.setThemes(themes);
+	app.seedRandom(uint32_t(time(nullptr)) ^ elapsedMs());
+	if (std::vector<ThumbEntry> thumbs; storage::openThumbs(thumbs)) {
+		log += "thumbs: " + std::to_string(thumbs.size()) + "\n";
+		app.setThumbSource(std::move(thumbs), storage::readThumb);
+	}
 	log += "ready: " + std::to_string(elapsedMs()) + " ms since start\n";
 
 	// One full redraw of both screens: the cost of every cursor move.

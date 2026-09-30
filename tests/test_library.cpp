@@ -29,23 +29,23 @@ std::vector<std::string> titles(const std::vector<GameEntry>& games, const std::
 TEST_CASE("All tab sorted by name ignores case") {
 	const auto games = sampleGames();
 	const UserData data;
-	CHECK(titles(games, libraryView(games, data, Tab::all(), SortKey::Name)) ==
+	CHECK(titles(games, libraryView(games, data, Tab::all(), Filter::All, SortKey::Name)) ==
 		std::vector<std::string>{"Advance Wars", "mario kart DS", "Metroid Fusion", "Zelda: Spirit Tracks"});
 }
 
 TEST_CASE("System tabs only show their system") {
 	const auto games = sampleGames();
 	const UserData data;
-	CHECK(titles(games, libraryView(games, data, Tab::console(System::Nds), SortKey::Name)) ==
+	CHECK(titles(games, libraryView(games, data, Tab::console(System::Nds), Filter::All, SortKey::Name)) ==
 		std::vector<std::string>{"mario kart DS", "Zelda: Spirit Tracks"});
-	CHECK(titles(games, libraryView(games, data, Tab::console(System::Gba), SortKey::Name)) ==
+	CHECK(titles(games, libraryView(games, data, Tab::console(System::Gba), Filter::All, SortKey::Name)) ==
 		std::vector<std::string>{"Advance Wars", "Metroid Fusion"});
 }
 
 TEST_CASE("System sort puts DS before GBA, then name") {
 	const auto games = sampleGames();
 	const UserData data;
-	CHECK(titles(games, libraryView(games, data, Tab::all(), SortKey::System)) ==
+	CHECK(titles(games, libraryView(games, data, Tab::all(), Filter::All, SortKey::System)) ==
 		std::vector<std::string>{"mario kart DS", "Zelda: Spirit Tracks", "Advance Wars", "Metroid Fusion"});
 }
 
@@ -55,50 +55,74 @@ TEST_CASE("Most played sort uses play counts, then name") {
 	data.recordLaunch("sd:/roms/GBA/metroid.gba", 10);
 	data.recordLaunch("sd:/roms/GBA/metroid.gba", 11);
 	data.recordLaunch("sd:/roms/NDS/zelda.nds", 12);
-	CHECK(titles(games, libraryView(games, data, Tab::all(), SortKey::MostPlayed)) ==
+	CHECK(titles(games, libraryView(games, data, Tab::all(), Filter::All, SortKey::MostPlayed)) ==
 		std::vector<std::string>{"Metroid Fusion", "Zelda: Spirit Tracks", "Advance Wars", "mario kart DS"});
 }
 
-TEST_CASE("Favorites tab only shows favorites") {
+TEST_CASE("Favorites filter only shows favorites, in any tab") {
 	const auto games = sampleGames();
 	UserData data;
 	data.toggleFavorite("sd:/roms/NDS/zelda.nds");
 	data.toggleFavorite("sd:/roms/GBA/advance.gba");
-	CHECK(titles(games, libraryView(games, data, Tab::favorites(), SortKey::Name)) ==
+	CHECK(titles(games, libraryView(games, data, Tab::all(), Filter::Favorites, SortKey::Name)) ==
 		std::vector<std::string>{"Advance Wars", "Zelda: Spirit Tracks"});
+	CHECK(titles(games, libraryView(games, data, Tab::console(System::Gba), Filter::Favorites, SortKey::Name)) ==
+		std::vector<std::string>{"Advance Wars"});
 }
 
-TEST_CASE("Recent tab lists played games newest first whatever the sort key") {
+TEST_CASE("Played, not played and Portuguese filters") {
+	auto games = sampleGames();
+	games[1].portuguese = true;
+	UserData data;
+	data.recordLaunch("sd:/roms/NDS/mario.nds", 100);
+	CHECK(titles(games, libraryView(games, data, Tab::all(), Filter::Played, SortKey::Name)) ==
+		std::vector<std::string>{"mario kart DS"});
+	CHECK(libraryView(games, data, Tab::all(), Filter::NotPlayed, SortKey::Name).size() == 3);
+	CHECK(titles(games, libraryView(games, data, Tab::all(), Filter::Portuguese, SortKey::Name)) ==
+		std::vector<std::string>{"Metroid Fusion"});
+}
+
+TEST_CASE("Recent sort lists played games newest first, then the others by name") {
 	const auto games = sampleGames();
 	UserData data;
 	data.recordLaunch("sd:/roms/NDS/mario.nds", 100);
 	data.recordLaunch("sd:/roms/GBA/metroid.gba", 200);
-	CHECK(titles(games, libraryView(games, data, Tab::recent(), SortKey::Name)) ==
-		std::vector<std::string>{"Metroid Fusion", "mario kart DS"});
+	CHECK(titles(games, libraryView(games, data, Tab::all(), Filter::All, SortKey::Recent)) ==
+		std::vector<std::string>{"Metroid Fusion", "mario kart DS", "Advance Wars", "Zelda: Spirit Tracks"});
 }
 
-TEST_CASE("Tabs and sort keys cycle and have labels") {
-	const std::vector<Tab> tabs = {Tab::all(), Tab::favorites(), Tab::recent()};
-	CHECK(stepTab(tabs, Tab::recent(), 1) == Tab::all());
-	CHECK(stepTab(tabs, Tab::all(), -1) == Tab::recent());
-	CHECK(stepTab(tabs, Tab::console(System::Gba), 1) == Tab::favorites()); // missing tab counts as the first
-	CHECK(nextSortKey(SortKey::MostPlayed) == SortKey::Name);
-	CHECK(std::string(tabLabel(Tab::favorites())) == "Fav");
+TEST_CASE("Tabs, filters and sort keys cycle and have labels") {
+	const std::vector<Tab> tabs = {Tab::all(), Tab::console(System::Nds), Tab::console(System::Gba)};
+	CHECK(stepTab(tabs, Tab::console(System::Gba), 1) == Tab::all());
+	CHECK(stepTab(tabs, Tab::all(), -1) == Tab::console(System::Gba));
+	CHECK(stepTab(tabs, Tab::console(System::Snes), 1) == Tab::console(System::Nds)); // missing tab counts as the first
+	CHECK(stepFilter(Filter::Portuguese, 1) == Filter::All);
+	CHECK(stepFilter(Filter::All, -1) == Filter::Portuguese);
+	CHECK(stepSortKey(SortKey::Name, 1) == SortKey::Recent);
+	CHECK(stepSortKey(SortKey::System, 1) == SortKey::Name);
+	CHECK(stepSortKey(SortKey::Name, -1) == SortKey::System);
+	CHECK(std::string(tabLabel(Tab::all())) == "All");
 	CHECK(std::string(tabLabel(Tab::console(System::Snes))) == "SNES");
-	CHECK(std::string(sortKeyLabel(SortKey::System)) == "System");
+	CHECK(std::string(filterLabel(Filter::NotPlayed)) == "Not played");
+	CHECK(std::string(sortKeyLabel(SortKey::Recent)) == "Recent");
 }
 
-TEST_CASE("Only consoles with games get a tab, in system order") {
+TEST_CASE("Only consoles with games get a tab, in display order, unless hidden") {
 	std::vector<GameEntry> games = {
 		{"sd:/roms/SNES/a.sfc", "A", System::Snes, "", 0},
 		{"sd:/roms/NDS/b.nds", "B", System::Nds, "", 0},
 		{"sd:/roms/SNES/c.sfc", "C", System::Snes, "", 0},
 	};
-	CHECK(availableTabs(games) == std::vector<Tab>{Tab::all(), Tab::favorites(), Tab::console(System::Nds),
-		Tab::console(System::Snes), Tab::recent()});
-	CHECK(availableTabs({}) == std::vector<Tab>{Tab::all(), Tab::favorites(), Tab::recent()});
+	CHECK(availableTabs(games) == std::vector<Tab>{Tab::all(), Tab::console(System::Nds), Tab::console(System::Snes)});
+	CHECK(availableTabs({}) == std::vector<Tab>{Tab::all()});
+	games.push_back({"sd:/roms/A26/p.a26", "P", System::Atari2600, "", 0});
+	games.push_back({"sd:/roms/GB/t.gb", "T", System::Gb, "", 0});
+	CHECK(availableTabs(games) == std::vector<Tab>{Tab::all(), Tab::console(System::Nds), Tab::console(System::Gb),
+		Tab::console(System::Snes), Tab::console(System::Atari2600)});
+	CHECK(availableTabs(games, 1u << int(System::Snes)) ==
+		std::vector<Tab>{Tab::all(), Tab::console(System::Nds), Tab::console(System::Gb), Tab::console(System::Atari2600)});
 	UserData data;
-	CHECK(libraryView(games, data, Tab::console(System::Snes), SortKey::Name).size() == 2);
+	CHECK(libraryView(games, data, Tab::console(System::Snes), Filter::All, SortKey::Name).size() == 2);
 }
 
 TEST_CASE("Tabs compare by console only for console tabs") {
@@ -106,13 +130,18 @@ TEST_CASE("Tabs compare by console only for console tabs") {
 	CHECK(Tab{Tab::Kind::All, System::Gba} == Tab::all());
 }
 
-TEST_CASE("Tab ids round-trip") {
-	for (const Tab tab : {Tab::all(), Tab::favorites(), Tab::recent(), Tab::console(System::Gba), Tab::console(System::MegaDrive)}) {
-		Tab parsed = Tab::favorites();
+TEST_CASE("Tab and filter ids round-trip") {
+	for (const Tab tab : {Tab::all(), Tab::console(System::Gba), Tab::console(System::MegaDrive)}) {
+		Tab parsed = Tab::console(System::Nds);
 		REQUIRE(tabFromId(tabId(tab), parsed));
 		CHECK(parsed == tab);
 	}
-	Tab unchanged = Tab::recent();
+	Tab unchanged = Tab::console(System::Gb);
 	CHECK_FALSE(tabFromId("psx", unchanged));
-	CHECK(unchanged == Tab::recent());
+	CHECK(unchanged == Tab::console(System::Gb));
+	for (int i = 0; i < kFilterCount; ++i) {
+		Filter parsed = Filter::All;
+		REQUIRE(filterFromId(filterId(Filter(i)), parsed));
+		CHECK(parsed == Filter(i));
+	}
 }

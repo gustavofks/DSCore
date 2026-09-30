@@ -1,6 +1,7 @@
 #include "platform/Storage.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <dirent.h>
 #include <string>
 #include <vector>
@@ -53,6 +54,32 @@ UserData loadUserData() {
 
 bool saveUserData(const UserData& userData) {
 	return saveText(kUserDataPath, userData.serialize());
+}
+
+namespace {
+
+FILE* thumbsFile = nullptr;
+
+} // namespace
+
+bool openThumbs(std::vector<ThumbEntry>& entries) {
+	if (thumbsFile) fclose(thumbsFile);
+	thumbsFile = fopen((std::string(kDataDir) + "/thumbs.bin").c_str(), "rb");
+	if (!thumbsFile) return false;
+	uint8_t header[kThumbHeaderSize];
+	uint32_t count = 0;
+	if (fread(header, 1, sizeof(header), thumbsFile) != sizeof(header) || !parseThumbHeader(header, sizeof(header), count)) {
+		return false;
+	}
+	std::vector<uint8_t> index(size_t(count) * kThumbEntrySize);
+	return fread(index.data(), 1, index.size(), thumbsFile) == index.size()
+		&& parseThumbEntries(index.data(), index.size(), count, entries);
+}
+
+bool readThumb(const ThumbEntry& entry, uint16_t* out) {
+	const size_t bytes = size_t(entry.width) * entry.height * 2;
+	// DS colors are stored little-endian, the ARM9's own byte order.
+	return thumbsFile && fseek(thumbsFile, long(entry.offset), SEEK_SET) == 0 && fread(out, 1, bytes, thumbsFile) == bytes;
 }
 
 std::optional<Cover> loadCover(const std::string& romPath) {

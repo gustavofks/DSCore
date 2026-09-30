@@ -4,6 +4,7 @@
 #include <dirent.h>
 
 #include "core/Systems.h"
+#include "core/Titles.h"
 
 namespace dscore {
 
@@ -47,11 +48,14 @@ bool readNds(FILE* f, const std::string& path, BannerLanguage lang, GameEntry& g
 
 	uint8_t banner[kBannerTitlesEnd];
 	const bool hasBanner = info.bannerOffset != 0 && readAt(f, long(info.bannerOffset), banner, sizeof(banner));
+	std::string text;
 	if (hasBanner) {
-		game.title = bannerTitle(banner, sizeof(banner), lang);
-		if (game.title.empty()) game.title = bannerTitle(banner, sizeof(banner), BannerLanguage::English);
+		text = bannerText(banner, sizeof(banner), lang);
+		if (text.empty()) text = bannerText(banner, sizeof(banner), BannerLanguage::English);
 	}
-	if (game.title.empty()) game.title = titleFromFileName(path);
+	const BannerText parsed = parseBannerText(text, titleFromFileName(path));
+	game.title = parsed.title;
+	game.publisher = parsed.publisher;
 	NdsIcon bannerIcon;
 	if (hasBanner && readNdsIcon(banner, sizeof(banner), bannerIcon)) icon = bannerIcon;
 	return true;
@@ -90,7 +94,10 @@ bool readRomInfo(const std::string& path, BannerLanguage lang, GameEntry& game, 
 			ok = true;
 			break;
 	}
-	if (ok) game.fileSize = fileSize(f);
+	if (ok) {
+		game.fileSize = fileSize(f);
+		game.portuguese = parseFileTags(path).portuguese;
+	}
 	fclose(f);
 	return ok;
 }

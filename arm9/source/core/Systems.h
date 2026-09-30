@@ -5,11 +5,11 @@
 
 namespace dscore {
 
-// Consoles a game can belong to, in tab and sort order. Values are stored in the library cache: append
-// new ones, never reorder.
-enum class System : uint8_t { Nds, Gba, Gb, Gbc, Nes, Snes, Sms, GameGear, MegaDrive };
+// Consoles a game can belong to. Values are stored in the library cache: append new ones, never reorder
+// (displayOrder() sets the order on screen).
+enum class System : uint8_t { Nds, Gba, Gb, Gbc, Nes, Snes, Sms, GameGear, MegaDrive, Atari2600 };
 
-constexpr int kSystemCount = int(System::MegaDrive) + 1;
+constexpr int kSystemCount = int(System::Atari2600) + 1;
 
 struct SystemInfo {
 	const char* id;    // stable lowercase key for config files, e.g. "gba"
@@ -18,6 +18,10 @@ struct SystemInfo {
 };
 
 const SystemInfo& systemInfo(System system);
+
+// Position of system in tabs and in the "System" sort: handhelds first, then home consoles by maker,
+// oldest first.
+int displayOrder(System system);
 
 // The system of a ROM file DSCore can launch, by extension (ignoring case). False for anything else,
 // including consoles whose launch is not supported yet.

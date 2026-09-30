@@ -29,7 +29,10 @@ TEST_CASE("systemForPath uses the extension, ignoring case") {
 	CHECK(isSystem("sd:/roms/GG/Sonic.gg", System::GameGear));
 	System system;
 	CHECK_FALSE(systemForPath("sd:/roms/GBA/Game.sav", system));
-	CHECK_FALSE(systemForPath("sd:/roms/SNES/Mario.sfc", system)); // not launchable yet
+	CHECK(isSystem("sd:/roms/SNES/Super Metroid.sfc", System::Snes));
+	CHECK(isSystem("sd:/roms/SNES/Zelda.SMC", System::Snes));
+	CHECK(isSystem("sd:/roms/A26/Pitfall!.a26", System::Atari2600));
+	CHECK_FALSE(systemForPath("sd:/roms/MD/Sonic.gen", system)); // not launchable yet
 }
 
 namespace {
@@ -94,6 +97,10 @@ TEST_CASE("relaunchKeys boots the console's emulator with the ROM as argument") 
 	CHECK(valueOf(relaunchKeys("sd:/roms/NES/Metroid.nes", false), "LAUNCH_TYPE") == "4");
 	CHECK(valueOf(relaunchKeys("sd:/roms/SMS/Sonic.sms", false), "LAUNCH_TYPE") == "6");
 	CHECK(valueOf(relaunchKeys("sd:/roms/GG/Sonic.gg", false), "LAUNCH_TYPE") == "6");
+	CHECK(valueOf(relaunchKeys("sd:/roms/A26/Pitfall!.a26", false), "LAUNCH_TYPE") == "9");
+	const auto snes = relaunchKeys("sd:/roms/SNES/Super Metroid.sfc", false);
+	CHECK(valueOf(snes, "LAUNCH_TYPE") == "21");
+	CHECK(valueOf(snes, "HOMEBREW_ARG") == "sd:/roms/SNES/Super Metroid.sfc"); // main.srldr makes it fat:
 	CHECK(bootstrapKeys("sd:/roms/GB/Tetris.gb").empty());
 }
 
@@ -101,6 +108,8 @@ TEST_CASE("twilightEmulator names the emulator main.srldr boots") {
 	CHECK(std::string(twilightEmulator(System::Gbc)) == "sd:/_nds/TWiLightMenu/emulators/gameyob.nds");
 	CHECK(std::string(twilightEmulator(System::Nes)) == "sd:/_nds/TWiLightMenu/emulators/nestwl.nds");
 	CHECK(std::string(twilightEmulator(System::GameGear)) == "sd:/_nds/TWiLightMenu/emulators/S8DS.nds");
+	CHECK(std::string(twilightEmulator(System::Atari2600)) == "sd:/_nds/TWiLightMenu/emulators/StellaDS.nds");
+	CHECK(std::string(twilightEmulator(System::Snes)) == "sd:/_nds/TWiLightMenu/emulators/SNEmulDS.srl");
 	CHECK(twilightEmulator(System::Nds) == nullptr);
 	CHECK(twilightEmulator(System::Gba) == nullptr);
 }
@@ -129,4 +138,14 @@ TEST_CASE("usesRsetMarker is false without the full constant") {
 TEST_CASE("relaunchMarker matches the protocol of the installed main.srldr") {
 	CHECK(relaunchMarker(true) == 0x54455352u);
 	CHECK(relaunchMarker(false) == 0u);
+}
+
+TEST_CASE("saveFileCandidates follows nds-bootstrap and emulator conventions") {
+	CHECK(saveFileCandidates("sd:/roms/NDS/br/Chrono Trigger (BR).nds") ==
+		std::vector<std::string>{"sd:/roms/NDS/br/saves/Chrono Trigger (BR).sav"});
+	CHECK(saveFileCandidates("sd:/roms/GBC/Donkey Kong Country (USA).gbc") ==
+		std::vector<std::string>{"sd:/roms/GBC/Donkey Kong Country (USA).sav"});
+	CHECK(saveFileCandidates("sd:/roms/SNES/Super Metroid.sfc") ==
+		std::vector<std::string>{"sd:/roms/SNES/Super Metroid.srm", "sd:/roms/SNES/Super Metroid.sav"});
+	CHECK(saveFileCandidates("sd:/roms/GBA/readme.txt").empty());
 }

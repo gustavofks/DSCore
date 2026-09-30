@@ -11,6 +11,7 @@
 #include "core/UserData.h"
 #include "gfx/Canvas.h"
 #include "ui/IconCache.h"
+#include "ui/ThumbCache.h"
 #include "ui/Theme.h"
 
 namespace dscore {
@@ -21,12 +22,15 @@ struct BrowserState {
 	const LibraryData* library = nullptr;
 	const UserData* userData = nullptr;
 	IconCache* icons = nullptr;                 // decoded icons, filled while drawing
+	ThumbCache* thumbs = nullptr;               // grid box art, filled while drawing; null to show icons
 	const Cover* cover = nullptr;               // box art of the selected game, when loaded
+	bool hasSave = false;                       // the selected game has a save file
 	std::string_view query;                     // active search filter, empty when none
 	const std::vector<size_t>* view = nullptr; // indexes into library->games for the current tab
 	size_t cursor = 0;                          // position in view
 	const std::vector<Tab>* tabs = nullptr;    // the tab bar, left to right
 	Tab tab = Tab::all();
+	Filter filter = Filter::All;
 	SortKey sort = SortKey::Name;
 	ViewMode mode = ViewMode::Grid;
 };
@@ -60,8 +64,9 @@ struct MenuItem {
 	std::string value; // empty for actions
 };
 
-// Bottom screen while the options menu is open.
-void drawMenuScreen(Canvas& canvas, const Theme& theme, const std::vector<MenuItem>& items, int selected);
+// Bottom screen while the options menu is open: title, rows scrolled to keep selected in view.
+void drawMenuScreen(Canvas& canvas, const Theme& theme, const std::string& title, const std::vector<MenuItem>& items,
+	int selected, const std::string& hint);
 
 // Full-screen message, e.g. while indexing or after an error.
 void drawMessageScreen(Canvas& canvas, const Theme& theme, const std::string& title, const std::vector<std::string>& lines);

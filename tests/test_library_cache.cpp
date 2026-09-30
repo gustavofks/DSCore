@@ -13,6 +13,8 @@ LibraryData sampleLibrary() {
 	LibraryData lib;
 	lib.games.push_back({"sd:/roms/NDS/Pok\xC3\xA9mon.nds", "Pok\xC3\xA9mon HeartGold", System::Nds, "IPKE", 134217728, 0});
 	lib.games.push_back({"sd:/roms/GBA/Metroid.gba", "Metroid Fusion", System::Gba, "AMTE", 8388608, -1});
+	lib.games[0].publisher = "Nintendo";
+	lib.games[1].portuguese = true;
 	NdsIcon icon{};
 	icon.bitmap[0] = 0x21;
 	icon.bitmap[511] = 0x7F;
@@ -39,6 +41,10 @@ TEST_CASE("library cache round-trips games and icons") {
 	CHECK(decoded.games[0].iconIndex == 0);
 	CHECK(decoded.games[1].system == System::Gba);
 	CHECK(decoded.games[1].iconIndex == -1);
+	CHECK(decoded.games[0].publisher == "Nintendo");
+	CHECK_FALSE(decoded.games[0].portuguese);
+	CHECK(decoded.games[1].publisher.empty());
+	CHECK(decoded.games[1].portuguese);
 	REQUIRE(decoded.icons.size() == 1);
 	CHECK(decoded.icons[0].bitmap[0] == 0x21);
 	CHECK(decoded.icons[0].bitmap[511] == 0x7F);

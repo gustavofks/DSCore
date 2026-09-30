@@ -16,7 +16,7 @@ namespace dscore {
 enum class Sound : uint8_t { None, Move, Select, Back, Launch };
 
 enum class Action : uint8_t {
-	Up, Down, Left, Right, Launch, Back, Favorite, PrevTab, NextTab, ToggleView, Menu, Search, Tap
+	Up, Down, Left, Right, Launch, Back, Favorite, PrevTab, NextTab, NextFilter, Menu, Search, Tap
 };
 
 // Library browser state and input handling, independent of the hardware: the caller feeds actions,
@@ -46,6 +46,12 @@ public:
 
 	bool menuOpen() const { return menuOpen_; }
 
+	// Box art thumbnails for the grid (see ThumbCache).
+	void setThumbSource(std::vector<ThumbEntry> entries, ThumbCache::Loader loader);
+
+	// Seeds "Random game" in the options menu, e.g. with the time.
+	void seedRandom(uint32_t seed) { random_ = seed ? seed : 1; }
+
 	// True once after the user picked "Rebuild library" in the options menu.
 	bool takeRebuildRequest();
 
@@ -55,6 +61,9 @@ public:
 
 	// Box art for the game at path (nullopt when it has none); shown while that game is selected.
 	void setCover(const std::string& path, std::optional<Cover> cover);
+
+	// Whether the game at path has a save file; shown while that game is selected.
+	void setHasSave(const std::string& path, bool hasSave);
 
 	// Each flag is cleared when read.
 	Sound takeSound();
@@ -70,6 +79,8 @@ private:
 	void select(size_t cursor);
 	void refreshTabs();
 	void switchTab(Tab tab, const std::string& currentPath);
+	void setFilter(Filter filter, const std::string& currentPath);
+	void setSort(SortKey sort, const std::string& currentPath);
 	std::string activate(size_t index);
 
 	const LibraryData& library_;
@@ -79,10 +90,19 @@ private:
 	std::vector<Tab> tabs_; // tab bar for the current library
 	std::vector<size_t> view_;
 	mutable IconCache icons_; // drawing is const but warms the cache
-	enum MenuRow { kSortRow, kViewRow, kThemeRow, kSoundRow, kRebuildRow, kCloseRow, kMenuRows };
+	mutable ThumbCache thumbs_;
+	enum MenuRow {
+		kFilterRow, kSortRow, kViewRow, kGridArtRow, kThemeRow, kSoundRow, kConsolesRow, kRandomRow, kRebuildRow, kCloseRow,
+		kMenuRows
+	};
+	enum class MenuPage : uint8_t { Main, Consoles };
+	std::vector<System> menuConsoles() const; // consoles listed on the Consoles page
 	std::vector<MenuItem> menuItems() const;
 	void handleMenu(Action action, int touchX, int touchY);
 	void activateMenuRow(int row, int direction);
+	void activateConsoleRow(int row);
+	int menuRowCount() const;
+	void pickRandomGame();
 	void setMenuOpen(bool open);
 	void handleSearch(Action action, int touchX, int touchY);
 	void pressKey(int index);
@@ -90,6 +110,8 @@ private:
 
 	bool menuOpen_ = false;
 	int menuRow_ = 0;
+	MenuPage menuPage_ = MenuPage::Main;
+	uint32_t random_ = 0x2545F491; // xorshift state for "Random game"
 	bool rebuildRequested_ = false;
 	const std::vector<Theme>* themes_ = nullptr;
 	bool searching_ = false; // the keyboard is on screen
@@ -97,6 +119,8 @@ private:
 	int keyIndex_ = 0;
 	std::string coverPath_;
 	std::optional<Cover> cover_;
+	std::string savePath_; // game the save flag belongs to
+	bool hasSave_ = false;
 	// The bottom screen keeps its pixels between frames: a cursor move within the page only redraws the
 	// two games involved. Anything else invalidates it.
 	mutable bool bottomValid_ = false;

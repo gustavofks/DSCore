@@ -12,6 +12,8 @@ constexpr const char* kLaunchTypeSdFlashcard = "1"; // ESDFlashcardLaunch: DS ga
 constexpr const char* kLaunchTypeNesDs = "4";       // ENESDSLaunch
 constexpr const char* kLaunchTypeGameYob = "5";     // EGameYobLaunch
 constexpr const char* kLaunchTypeS8Ds = "6";        // ES8DSLaunch
+constexpr const char* kLaunchTypeStellaDs = "9";    // EStellaDSLaunch
+constexpr const char* kLaunchTypeSnemulDs = "21";   // ESNEmulDSLaunch
 constexpr const char* kGbaRunner2 = "sd:/_nds/GBARunner2_arm7dldi_dsi.nds";
 
 constexpr uint32_t kRsetMarker = 0x54455352; // 'RSET' as stored little-endian in memory
@@ -27,6 +29,8 @@ const char* launchTypeFor(System system) {
 		case System::Nes: return kLaunchTypeNesDs;
 		case System::Sms:
 		case System::GameGear: return kLaunchTypeS8Ds;
+		case System::Atari2600: return kLaunchTypeStellaDs;
+		case System::Snes: return kLaunchTypeSnemulDs;
 		default: return nullptr;
 	}
 }
@@ -58,6 +62,9 @@ const char* twilightEmulator(System system) {
 		case System::Nes: return "sd:/_nds/TWiLightMenu/emulators/nestwl.nds";
 		case System::Sms:
 		case System::GameGear: return "sd:/_nds/TWiLightMenu/emulators/S8DS.nds";
+		case System::Atari2600: return "sd:/_nds/TWiLightMenu/emulators/StellaDS.nds";
+		// lastRunROM() boots it through the ToolchainGenericDS loader and turns HOMEBREW_ARG into a fat: path.
+		case System::Snes: return "sd:/_nds/TWiLightMenu/emulators/SNEmulDS.srl";
 		default: return nullptr;
 	}
 }
@@ -75,6 +82,19 @@ std::vector<IniKey> bootstrapKeys(std::string_view romPath) {
 		{"BOOST_CPU", "1"},
 		{"BOOST_VRAM", "0"},
 	};
+}
+
+std::vector<std::string> saveFileCandidates(std::string_view romPath) {
+	const size_t slash = romPath.find_last_of('/');
+	const std::string dir(romPath.substr(0, slash == std::string_view::npos ? 0 : slash + 1));
+	std::string_view name = romPath.substr(slash == std::string_view::npos ? 0 : slash + 1);
+	const size_t dot = name.find_last_of('.');
+	const std::string stem(dot == std::string_view::npos ? name : name.substr(0, dot));
+	System system;
+	if (!systemForPath(romPath, system)) return {};
+	if (system == System::Nds) return {dir + "saves/" + stem + ".sav"};
+	if (system == System::Snes) return {dir + stem + ".srm", dir + stem + ".sav"};
+	return {dir + stem + ".sav"};
 }
 
 bool usesRsetMarker(const uint8_t* arm9, size_t len) {

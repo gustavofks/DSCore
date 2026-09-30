@@ -2,6 +2,7 @@
 
 #include "core/Config.h"
 #include "core/Cover.h"
+#include "core/Thumbs.h"
 #include "core/LibraryCache.h"
 #include "core/UserData.h"
 #include "ui/Theme.h"
@@ -23,6 +24,10 @@ bool saveUserData(const UserData& userData);
 
 // Box art for a ROM from covers/ (written by tools/fetch_covers.py); nullopt when missing or invalid.
 std::optional<Cover> loadCover(const std::string& romPath);
+
+// Opens thumbs.bin (see core/Thumbs.h) and reads its index; the file stays open for readThumb().
+bool openThumbs(std::vector<ThumbEntry>& entries);
+bool readThumb(const ThumbEntry& entry, uint16_t* out);
 
 // Built-in themes followed by the *.ini files in themes/ (see parseTheme), in file name order.
 std::vector<Theme> loadThemes();
