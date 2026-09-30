@@ -1,10 +1,25 @@
 #include "doctest.h"
 
 #include <string>
+#include <type_traits>
+#include <vector>
 
 #include "core/IniPatch.h"
 
 using namespace dscore;
+
+// Keys read from a file are built from temporary strings; a non-owning key once wrote freed memory
+// into TWiLight's settings.ini.
+static_assert(std::is_same_v<decltype(IniKey::key), std::string>, "IniKey must own its key");
+
+TEST_CASE("IniKey built from temporary strings keeps its key") {
+	std::vector<IniKey> keys;
+	for (const char* name : {"SHOW_MDGEN", "LAUNCH_TYPE"}) keys.push_back({std::string(name), "3"});
+	const std::string filler(256, 'x'); // reuses the memory the temporaries had
+	CHECK(patchIni("[SRLOADER]\nSHOW_MDGEN = 1\nLAUNCH_TYPE = 10\n", "SRLOADER", keys) ==
+		"[SRLOADER]\nSHOW_MDGEN = 3\nLAUNCH_TYPE = 3\n");
+	CHECK(filler.size() == 256);
+}
 
 TEST_CASE("patchIni replaces keys in place and keeps everything else") {
 	const std::string in =

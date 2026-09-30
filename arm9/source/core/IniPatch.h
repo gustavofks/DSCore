@@ -6,8 +6,9 @@
 
 namespace dscore {
 
+// Owns both strings: keys are also built from values read from files, which a view would outlive.
 struct IniKey {
-	std::string_view key;
+	std::string key;
 	std::string value;
 };
 
