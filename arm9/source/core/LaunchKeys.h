@@ -11,8 +11,8 @@
 
 namespace dscore {
 
-// Mega Drive games up to this size run in jEnesisDS, larger ones in PicoDriveTWL, like TWiLight Menu++'s
-// "hybrid" setting.
+// .gen games up to this size run in jEnesisDS, like TWiLight Menu++'s "hybrid" setting; larger ones and
+// .md files (which nds-bootstrap-hb cannot hand to jEnesisDS) run in PicoDriveTWL.
 constexpr uint32_t kJenesisMaxSize = 0x300000;
 
 // [SRLOADER] keys (settings.ini) that make TWiLight Menu++'s main.srldr relaunch romPath from the SD

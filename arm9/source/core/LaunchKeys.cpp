@@ -3,6 +3,8 @@
 #include <cstring>
 #include <string>
 
+#include "core/Text.h"
+
 namespace dscore {
 
 namespace {
@@ -22,16 +24,20 @@ constexpr const char* kPicoDrive = "sd:/_nds/TWiLightMenu/emulators/PicoDriveTWL
 constexpr uint32_t kRsetMarker = 0x54455352; // 'RSET' as stored little-endian in memory
 constexpr char kRsetBytes[] = {'R', 'S', 'E', 'T'};
 
-bool usesJenesis(System system, uint32_t romSize) {
-	return system == System::MegaDrive && romSize <= kJenesisMaxSize;
+// jEnesisDS needs nds-bootstrap-hb to build a RAM drive from the ROM, which it only does for files named
+// .gen (nds-bootstrap hb/arm9/source/main.cpp); .md files and large games go to PicoDriveTWL.
+bool usesJenesis(std::string_view romPath, uint32_t romSize) {
+	System system;
+	return systemForPath(romPath, system) && system == System::MegaDrive && hasExtension(romPath, ".gen") &&
+	       romSize <= kJenesisMaxSize;
 }
 
 // LAUNCH_TYPE for a system's games, or nullptr when lastRunROM() cannot relaunch them.
-const char* launchTypeFor(System system, uint32_t romSize) {
+const char* launchTypeFor(System system, bool jenesis) {
 	switch (system) {
 		case System::Nds:
 		case System::Gba: return kLaunchTypeSdFlashcard;
-		case System::MegaDrive: return usesJenesis(system, romSize) ? kLaunchTypeSdFlashcard : kLaunchTypePicoDrive;
+		case System::MegaDrive: return jenesis ? kLaunchTypeSdFlashcard : kLaunchTypePicoDrive;
 		case System::Gb:
 		case System::Gbc: return kLaunchTypeGameYob;
 		case System::Nes: return kLaunchTypeNesDs;
@@ -47,26 +53,27 @@ const char* launchTypeFor(System system, uint32_t romSize) {
 
 std::vector<IniKey> relaunchKeys(std::string_view romPath, bool homebrew, uint32_t romSize) {
 	System system;
-	if (!systemForPath(romPath, system) || !launchTypeFor(system, romSize)) return {};
+	const bool jenesis = usesJenesis(romPath, romSize);
+	if (!systemForPath(romPath, system) || !launchTypeFor(system, jenesis)) return {};
 	const bool viaBootstrapHb = system != System::Nds || homebrew;
 	std::vector<IniKey> keys = {
 		{"ROM_PATH", std::string(romPath)},
-		{"LAUNCH_TYPE", launchTypeFor(system, romSize)},
+		{"LAUNCH_TYPE", launchTypeFor(system, jenesis)},
 		{"PREVIOUS_USED_DEVICE", "0"},
 		{"SLOT1_LAUNCHED", "0"}, // otherwise lastRunROM() boots the Slot-1 card instead
 		{"HOMEBREW_BOOTSTRAP", viaBootstrapHb ? "1" : "0"},
 	};
 	// lastRunROM() passes HOMEBREW_ARG to emulators as argv[1]; through nds-bootstrap-hb the ROM goes to
 	// nds-bootstrap.ini instead.
-	if (system == System::Gba || usesJenesis(system, romSize)) keys.push_back({"HOMEBREW_ARG", ""});
+	if (system == System::Gba || jenesis) keys.push_back({"HOMEBREW_ARG", ""});
 	else if (system != System::Nds) keys.push_back({"HOMEBREW_ARG", std::string(romPath)});
-	if (system == System::MegaDrive && !usesJenesis(system, romSize)) keys.push_back({"SHOW_MDGEN", "1"});
+	if (system == System::MegaDrive && !jenesis) keys.push_back({"SHOW_MDGEN", "1"});
 	return keys;
 }
 
 std::vector<std::string> temporaryKeys(std::string_view romPath, uint32_t romSize) {
 	System system;
-	if (!systemForPath(romPath, system) || system != System::MegaDrive || usesJenesis(system, romSize)) return {};
+	if (!systemForPath(romPath, system) || system != System::MegaDrive || usesJenesis(romPath, romSize)) return {};
 	return {"SHOW_MDGEN"};
 }
 
@@ -75,7 +82,7 @@ const char* emulatorFor(std::string_view romPath, uint32_t romSize) {
 	if (!systemForPath(romPath, system)) return nullptr;
 	switch (system) {
 		case System::Gba: return kGbaRunner2;
-		case System::MegaDrive: return usesJenesis(system, romSize) ? kJenesis : kPicoDrive;
+		case System::MegaDrive: return usesJenesis(romPath, romSize) ? kJenesis : kPicoDrive;
 		case System::Gb:
 		case System::Gbc: return "sd:/_nds/TWiLightMenu/emulators/gameyob.nds";
 		case System::Nes: return "sd:/_nds/TWiLightMenu/emulators/nestwl.nds";
@@ -91,7 +98,7 @@ const char* emulatorFor(std::string_view romPath, uint32_t romSize) {
 std::vector<IniKey> bootstrapKeys(std::string_view romPath, uint32_t romSize) {
 	System system;
 	if (!systemForPath(romPath, system)) return {};
-	if (usesJenesis(system, romSize)) {
+	if (usesJenesis(romPath, romSize)) {
 		// romToRamDisk: nds-bootstrap-hb loads the ROM into memory and jEnesisDS opens it as fat:/ROM.BIN.
 		return {
 			{"NDS_PATH", kJenesis},
