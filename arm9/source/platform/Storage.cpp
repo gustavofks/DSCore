@@ -82,6 +82,12 @@ bool readThumb(const ThumbEntry& entry, uint16_t* out) {
 	return thumbsFile && fseek(thumbsFile, long(entry.offset), SEEK_SET) == 0 && fread(out, 1, bytes, thumbsFile) == bytes;
 }
 
+MetadataMap loadMetadata() {
+	std::string ini;
+	if (!readFile(std::string(kDataDir) + "/metadata.ini", ini)) return {};
+	return parseMetadata(ini);
+}
+
 std::optional<Cover> loadCover(const std::string& romPath) {
 	std::vector<uint8_t> bytes;
 	if (!readFile(std::string(kDataDir) + "/covers/" + coverFileName(romPath), bytes)) return std::nullopt;

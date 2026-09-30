@@ -20,6 +20,11 @@ struct GameEntry {
 	int32_t iconIndex = -1; // index into LibraryData::icons, -1 when the game has no icon
 	std::string publisher;  // from the DS banner, empty when unknown
 	bool portuguese = false; // Portuguese release or fan translation (see parseFileTags)
+	// From metadata.ini (see core/Metadata.h), applied after loading; not stored in the library cache.
+	std::string genre;
+	std::string developer;
+	uint16_t year = 0;
+	uint8_t players = 0;
 };
 
 // A bottom-screen tab: every game, or the games of one console.
@@ -42,7 +47,7 @@ enum class Filter : uint8_t { All, Favorites, Played, NotPlayed, Portuguese };
 constexpr int kFilterCount = int(Filter::Portuguese) + 1;
 
 // Values are stored in config.ini: append new ones.
-enum class SortKey : uint8_t { Name, System, MostPlayed, Recent };
+enum class SortKey : uint8_t { Name, System, MostPlayed, Recent, Year };
 
 // The tabs shown for this library: All, then one tab per console with at least one game (in
 // displayOrder), leaving out consoles whose bit is set in hidden (bit = System value).
@@ -53,7 +58,7 @@ std::vector<Tab> availableTabs(const std::vector<GameEntry>& games, uint32_t hid
 Tab stepTab(const std::vector<Tab>& tabs, Tab current, int direction);
 
 Filter stepFilter(Filter filter, int direction);
-SortKey stepSortKey(SortKey key, int direction); // Name, Recent, Most played, System
+SortKey stepSortKey(SortKey key, int direction); // Name, Recent, Most played, Year, System
 const char* tabLabel(Tab tab); // short, fits the tab bar
 const char* filterLabel(Filter filter);
 const char* sortKeyLabel(SortKey key);
@@ -64,10 +69,11 @@ bool tabFromId(std::string_view id, Tab& out);
 const char* filterId(Filter filter);
 bool filterFromId(std::string_view id, Filter& out);
 
-// Indexes into games for one tab, in display order, keeping the games that pass filter and whose title
-// matches query (see matchesQuery). Recent lists played games newest first, then the others; every order
+// Indexes into games for one tab, in display order, keeping the games that pass filter, whose title
+// matches query (see matchesQuery) and, unless genre is empty, of that genre. Recent lists played games
+// newest first, then the others; Year lists the oldest first and games without a year last; every order
 // breaks ties by title, then path.
 std::vector<size_t> libraryView(const std::vector<GameEntry>& games, const UserData& data, Tab tab, Filter filter,
-	SortKey sort, std::string_view query = {});
+	SortKey sort, std::string_view query = {}, std::string_view genre = {});
 
 } // namespace dscore
