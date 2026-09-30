@@ -76,6 +76,26 @@ cover (DS from GameTDB, the rest from libretro-thumbnails), scales it for the DS
 standard library is needed. Covers already present are skipped; `--force` downloads them again and
 `--twilight` also saves the original images where TWiLight Menu++ looks for box art.
 
+## Save backups
+
+Saves live next to the games on the SD card, so a lost or damaged card loses them too. With the card
+in the PC:
+
+```powershell
+python tools\backup_saves.py E:\
+```
+
+It copies every save under `roms` (including nds-bootstrap's `saves` folders), the emulator data under
+`data` and DSCore's favorites and history to `DSCore saves\<date>` in your user folder (`--dest` picks
+another place). Nothing is copied when nothing changed since the last backup. To put saves back:
+
+```powershell
+python tools\backup_saves.py --restore "C:\Users\you\DSCore saves\2026-09-29_214254" E:\
+```
+
+This only lists what would change; add `--apply` to copy. Saves it replaces are kept as
+`<name>.before-restore`.
+
 ## Themes
 
 Pick a theme in the options menu (START). To make your own, put an INI file in
