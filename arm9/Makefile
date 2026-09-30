@@ -55,6 +55,9 @@ else
 
 DEPENDS := $(OFILES:.o=.d)
 
+# The sources that show kVersion (core/Version.h) are rebuilt when VERSION changes.
+main.o Views.o: ../../VERSION
+
 $(OUTPUT).elf: $(OFILES)
 
 # load_bin.h / bootstub_bin.h must exist before any source that includes them is compiled.
