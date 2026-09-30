@@ -4,10 +4,12 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <sys/stat.h>
 
 #include "common/nds_loader_arm9.h"
 #include "common/systemdetails.h"
 #include "core/IniPatch.h"
+#include "core/IniText.h"
 #include "core/LaunchKeys.h"
 #include "core/NdsHeader.h"
 #include "platform/FileIo.h"
@@ -21,6 +23,8 @@ constexpr const char* kSettingsBackup = "sd:/_nds/TWiLightMenu/settings.ini.dsco
 constexpr const char* kBootstrapPath = "sd:/_nds/nds-bootstrap.ini";
 constexpr const char* kBootstrapBackup = "sd:/_nds/nds-bootstrap.ini.dscore-bak";
 constexpr const char* kMainSrldr = "sd:/_nds/TWiLightMenu/main.srldr";
+// settings.ini values a launch changed for itself only (see temporaryKeys()).
+constexpr const char* kRestorePath = "sd:/_nds/DSCore/restore-settings.ini";
 
 // title/arm9/source/main.cpp calls lastRunROM() when this bit is set and kRelaunchMarker holds the
 // value it expects; the menu bootloader keeps 0x02000000-0x02003FFF intact across runNdsFile().
@@ -89,25 +93,59 @@ bool patchIniFile(const char* path, const char* backup, const char* section, con
 	return replaceFile(path, patched.data(), patched.size());
 }
 
+uint32_t fileSizeOf(const std::string& path) {
+	struct stat st;
+	return stat(path.c_str(), &st) == 0 && st.st_size > 0 ? uint32_t(st.st_size) : 0;
+}
+
+// Saves the current values of keys (settings.ini, [SRLOADER]) so restoreTwilightSettings() can put them
+// back. A restore file left by an earlier launch already holds the user's values and is kept.
+bool rememberSettings(const std::vector<std::string>& keys) {
+	if (keys.empty() || fileExists(kRestorePath)) return true;
+	std::string ini;
+	if (!readFile(kSettingsPath, ini)) return false;
+	std::string out = "[SRLOADER]\n";
+	for (const std::string& wanted : keys) {
+		std::string value;
+		forEachIniEntry(ini, [&](std::string_view section, std::string_view key, std::string_view v) {
+			if (section == "SRLOADER" && key == wanted) value = std::string(v);
+		});
+		out += wanted + " = " + value + "\n";
+	}
+	return writeFile(kRestorePath, out.data(), out.size());
+}
+
 } // namespace
+
+void restoreTwilightSettings() {
+	std::string ini;
+	if (!readFile(kRestorePath, ini)) return;
+	std::vector<IniKey> keys;
+	forEachIniEntry(ini, [&](std::string_view section, std::string_view key, std::string_view value) {
+		if (section == "SRLOADER") keys.push_back({std::string(key), std::string(value)});
+	});
+	if (keys.empty() || patchIniFile(kSettingsPath, kSettingsBackup, "SRLOADER", keys)) remove(kRestorePath);
+}
 
 LaunchError launchViaTwilight(const std::string& romPath, int* loaderCode) {
 	System system;
 	if (!systemForPath(romPath, system)) return LaunchError::Unsupported;
 	bool homebrew = false;
 	if (!detectHomebrew(romPath, homebrew)) return LaunchError::RomRead;
-	const std::vector<IniKey> keys = relaunchKeys(romPath, homebrew);
+	const uint32_t romSize = fileSizeOf(romPath);
+	const std::vector<IniKey> keys = relaunchKeys(romPath, homebrew, romSize);
 	if (keys.empty()) return LaunchError::Unsupported;
 	// Without its emulator, main.srldr would fall back to a flashcard path and fail after DSCore has quit.
-	const char* emulator = twilightEmulator(system);
+	const char* emulator = emulatorFor(romPath, romSize);
 	if (emulator && !fileExists(emulator)) return LaunchError::EmulatorMissing;
 
 	bool rset = false;
 	if (!detectRsetMarker(rset)) return LaunchError::MainRead;
 
 	if (!fileExists(kSettingsPath)) return LaunchError::SettingsRead;
+	if (!rememberSettings(temporaryKeys(romPath, romSize))) return LaunchError::SettingsWrite;
 	if (!patchIniFile(kSettingsPath, kSettingsBackup, "SRLOADER", keys)) return LaunchError::SettingsWrite;
-	const std::vector<IniKey> bootstrap = bootstrapKeys(romPath);
+	const std::vector<IniKey> bootstrap = bootstrapKeys(romPath, romSize);
 	if (!bootstrap.empty() && !patchIniFile(kBootstrapPath, kBootstrapBackup, "NDS-BOOTSTRAP", bootstrap)) {
 		return LaunchError::SettingsWrite;
 	}

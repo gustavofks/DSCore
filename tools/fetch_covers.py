@@ -44,10 +44,12 @@ DATS = {  # system -> (thumbnail repository, No-Intro database file)
     "snes": ("Nintendo_-_Super_Nintendo_Entertainment_System",
              "no-intro/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System.dat"),
     "a26": ("Atari_-_2600", "no-intro/Atari%20-%202600.dat"),
+    "md": ("Sega_-_Mega_Drive_-_Genesis", "no-intro/Sega%20-%20Mega%20Drive%20-%20Genesis.dat"),
 }
 # The extensions DSCore recognizes (core/Systems.cpp), mapped to DATS keys.
 EXTENSIONS = {".nds": "nds", ".gba": "gba", ".gb": "gb", ".sgb": "gb", ".gbc": "gbc", ".nes": "nes", ".fds": "fds",
-              ".sms": "sms", ".gg": "gg", ".sfc": "snes", ".smc": "snes", ".a26": "a26"}
+              ".sms": "sms", ".gg": "gg", ".sfc": "snes", ".smc": "snes", ".a26": "a26",
+              ".gen": "md", ".md": "md"}
 DAT_MAX_AGE = 7 * 24 * 3600
 REGION_PREFERENCE = ["(USA", "(World", "(Europe"]
 # GameTDB region folder from the last letter of a DS game code.

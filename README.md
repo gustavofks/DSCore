@@ -12,8 +12,11 @@ removed.
 
 - Library of games found anywhere under `sd:/roms`, recognized by extension: DS (`.nds`), GBA
   (`.gba`), Game Boy (`.gb`, `.sgb`), Game Boy Color (`.gbc`), NES (`.nes`, `.fds`), Master System
-  (`.sms`), Game Gear (`.gg`), Super Nintendo (`.sfc`, `.smc`) and Atari 2600 (`.a26`). Games of the
+  (`.sms`), Game Gear (`.gg`), Super Nintendo (`.sfc`, `.smc`), Mega Drive (`.md`, `.gen`) and Atari 2600 (`.a26`). Games of the
   other consoles run in the emulators TWiLight Menu++ ships in `sd:/_nds/TWiLightMenu/emulators`.
+  Mega Drive games up to 3 MB run in jEnesisDS and larger ones in PicoDriveTWL; for those, DSCore sets
+  TWiLight's Mega Drive emulator setting to PicoDriveTWL for the launch and puts it back on its next
+  start.
 - Clean titles: the full DS banner title and publisher, or the file name without region tags,
   release numbers and site names.
 - Box art on the details screen and as thumbnails in the grid, downloaded on a PC with

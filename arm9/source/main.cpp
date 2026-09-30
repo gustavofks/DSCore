@@ -211,6 +211,7 @@ int main(int argc, char** argv) {
 	showMessage(screens, "DSCore", {"Loading..."}, "", {});
 	fadeIn(kFadeFrames);
 	storage::ensureDataDir();
+	restoreTwilightSettings();
 
 	std::string log = std::string("DSCore ") + kVersion + " boot\n";
 	Config config = storage::loadConfig();
