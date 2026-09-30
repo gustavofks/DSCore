@@ -68,9 +68,19 @@ A TWiLight Menu++ update replaces `dsimenu.srldr`; copy DSCore again afterwards.
 To try DSCore without installing it, run `tools\deploy.ps1 -Target E:\ -Mode app` and open
 `dscore.nds` from TWiLight Menu++'s file browser.
 
+## With the SD card in the PC
+
+One command backs up the saves, downloads box art for new games and updates genres and years:
+
+```powershell
+python tools\sync.py E:\
+```
+
+The sections below describe each step; `--no-backup`, `--no-covers` and `--no-metadata` skip one.
+
 ## Box art
 
-With the SD card in the PC, run:
+To run only this step:
 
 ```powershell
 python tools\fetch_covers.py E:\
