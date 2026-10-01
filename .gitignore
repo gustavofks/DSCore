@@ -75,6 +75,7 @@ docs/plan.md
 docs/decisions.md
 docs/research/
 docs/superpowers/
+docs/mockups/
 
 # Dados únicos do console (nunca versionar)
 *.bin.sha1
