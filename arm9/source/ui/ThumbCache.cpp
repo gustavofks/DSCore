@@ -12,6 +12,11 @@ void ThumbCache::setSource(std::vector<ThumbEntry> entries, Loader loader) {
 	for (Slot& slot : slots_) slot.used = false;
 }
 
+uint16_t ThumbCache::accent(const std::string& romPath) const {
+	const ThumbEntry* entry = findThumb(entries_, thumbKey(romPath));
+	return entry ? entry->accent : 0;
+}
+
 const uint16_t* ThumbCache::get(const std::string& romPath, int& width, int& height) {
 	if (entries_.empty()) return nullptr;
 	const uint32_t key = thumbKey(romPath);

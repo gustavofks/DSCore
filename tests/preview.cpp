@@ -113,6 +113,8 @@ int main(int argc, char** argv) {
 	App br(library, userData, config);
 	prepare(br);
 	shot(br, "02-br-detail");
+	br.handle(Action::Details);
+	shot(br, "02b-details");
 
 	config.selectedPath = pathOf("Star Wars - The Force Unleashed II");
 	App longTitle(library, userData, config);

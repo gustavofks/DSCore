@@ -1,6 +1,7 @@
 #include "core/LaunchKeys.h"
 
 #include <cstring>
+#include <optional>
 #include <string>
 
 #include "core/Text.h"
@@ -20,6 +21,7 @@ constexpr const char* kLaunchTypeSnemulDs = "21";   // ESNEmulDSLaunch
 constexpr const char* kGbaRunner2 = "sd:/_nds/GBARunner2_arm7dldi_dsi.nds";
 constexpr const char* kJenesis = "sd:/_nds/TWiLightMenu/emulators/jEnesisDS.nds";
 constexpr const char* kPicoDrive = "sd:/_nds/TWiLightMenu/emulators/PicoDriveTWL.nds";
+constexpr const char* kSnemulLegacy = "sd:/_nds/TWiLightMenu/emulators/SNEmulDS-legacy.nds";
 
 constexpr uint32_t kRsetMarker = 0x54455352; // 'RSET' as stored little-endian in memory
 constexpr char kRsetBytes[] = {'R', 'S', 'E', 'T'};
@@ -32,12 +34,30 @@ bool usesJenesis(std::string_view romPath, uint32_t romSize) {
 	       romSize <= kJenesisMaxSize;
 }
 
+// Emulators nds-bootstrap-hb boots with the ROM loaded into a RAM drive (romToRamDisk in TWiLight's ROM
+// browser): the emulator, the name the ROM gets on that drive and whether the CPU runs boosted.
+struct RamDriveLaunch {
+	const char* emulator;
+	const char* romName;
+	bool boostCpu;
+};
+
+std::optional<RamDriveLaunch> ramDriveLaunch(std::string_view romPath, uint32_t romSize, bool newSnesEmulator) {
+	System system;
+	if (!systemForPath(romPath, system)) return std::nullopt;
+	if (usesJenesis(romPath, romSize)) return RamDriveLaunch{kJenesis, "fat:/ROM.BIN", true};
+	// TWiLight's default (NEW_SNES_EMU_VER = 0) for SNES games on the SD card.
+	if (system == System::Snes && !newSnesEmulator) return RamDriveLaunch{kSnemulLegacy, "fat:/ROM.SMC", false};
+	return std::nullopt;
+}
+
 // LAUNCH_TYPE for a system's games, or nullptr when lastRunROM() cannot relaunch them.
-const char* launchTypeFor(System system, bool jenesis) {
+const char* launchTypeFor(System system, bool viaRamDrive) {
+	if (viaRamDrive) return kLaunchTypeSdFlashcard; // nds-bootstrap-hb, configured by nds-bootstrap.ini
 	switch (system) {
 		case System::Nds:
 		case System::Gba: return kLaunchTypeSdFlashcard;
-		case System::MegaDrive: return jenesis ? kLaunchTypeSdFlashcard : kLaunchTypePicoDrive;
+		case System::MegaDrive: return kLaunchTypePicoDrive;
 		case System::Gb:
 		case System::Gbc: return kLaunchTypeGameYob;
 		case System::Nes: return kLaunchTypeNesDs;
@@ -51,23 +71,23 @@ const char* launchTypeFor(System system, bool jenesis) {
 
 } // namespace
 
-std::vector<IniKey> relaunchKeys(std::string_view romPath, bool homebrew, uint32_t romSize) {
+std::vector<IniKey> relaunchKeys(std::string_view romPath, bool homebrew, uint32_t romSize, bool newSnesEmulator) {
 	System system;
-	const bool jenesis = usesJenesis(romPath, romSize);
-	if (!systemForPath(romPath, system) || !launchTypeFor(system, jenesis)) return {};
+	const bool ramDrive = ramDriveLaunch(romPath, romSize, newSnesEmulator).has_value();
+	if (!systemForPath(romPath, system) || !launchTypeFor(system, ramDrive)) return {};
 	const bool viaBootstrapHb = system != System::Nds || homebrew;
 	std::vector<IniKey> keys = {
 		{"ROM_PATH", std::string(romPath)},
-		{"LAUNCH_TYPE", launchTypeFor(system, jenesis)},
+		{"LAUNCH_TYPE", launchTypeFor(system, ramDrive)},
 		{"PREVIOUS_USED_DEVICE", "0"},
 		{"SLOT1_LAUNCHED", "0"}, // otherwise lastRunROM() boots the Slot-1 card instead
 		{"HOMEBREW_BOOTSTRAP", viaBootstrapHb ? "1" : "0"},
 	};
 	// lastRunROM() passes HOMEBREW_ARG to emulators as argv[1]; through nds-bootstrap-hb the ROM goes to
 	// nds-bootstrap.ini instead.
-	if (system == System::Gba || jenesis) keys.push_back({"HOMEBREW_ARG", ""});
+	if (system == System::Gba || ramDrive) keys.push_back({"HOMEBREW_ARG", ""});
 	else if (system != System::Nds) keys.push_back({"HOMEBREW_ARG", std::string(romPath)});
-	if (system == System::MegaDrive && !jenesis) keys.push_back({"SHOW_MDGEN", "1"});
+	if (system == System::MegaDrive && !ramDrive) keys.push_back({"SHOW_MDGEN", "1"});
 	return keys;
 }
 
@@ -77,12 +97,15 @@ std::vector<std::string> temporaryKeys(std::string_view romPath, uint32_t romSiz
 	return {"SHOW_MDGEN"};
 }
 
-const char* emulatorFor(std::string_view romPath, uint32_t romSize) {
+const char* emulatorFor(std::string_view romPath, uint32_t romSize, bool newSnesEmulator) {
 	System system;
 	if (!systemForPath(romPath, system)) return nullptr;
+	if (const std::optional<RamDriveLaunch> ramDrive = ramDriveLaunch(romPath, romSize, newSnesEmulator)) {
+		return ramDrive->emulator;
+	}
 	switch (system) {
 		case System::Gba: return kGbaRunner2;
-		case System::MegaDrive: return usesJenesis(romPath, romSize) ? kJenesis : kPicoDrive;
+		case System::MegaDrive: return kPicoDrive;
 		case System::Gb:
 		case System::Gbc: return "sd:/_nds/TWiLightMenu/emulators/gameyob.nds";
 		case System::Nes: return "sd:/_nds/TWiLightMenu/emulators/nestwl.nds";
@@ -95,17 +118,16 @@ const char* emulatorFor(std::string_view romPath, uint32_t romSize) {
 	}
 }
 
-std::vector<IniKey> bootstrapKeys(std::string_view romPath, uint32_t romSize) {
+std::vector<IniKey> bootstrapKeys(std::string_view romPath, uint32_t romSize, bool newSnesEmulator) {
 	System system;
 	if (!systemForPath(romPath, system)) return {};
-	if (usesJenesis(romPath, romSize)) {
-		// romToRamDisk: nds-bootstrap-hb loads the ROM into memory and jEnesisDS opens it as fat:/ROM.BIN.
+	if (const std::optional<RamDriveLaunch> ramDrive = ramDriveLaunch(romPath, romSize, newSnesEmulator)) {
 		return {
-			{"NDS_PATH", kJenesis},
-			{"HOMEBREW_ARG", "fat:/ROM.BIN"},
+			{"NDS_PATH", ramDrive->emulator},
+			{"HOMEBREW_ARG", ramDrive->romName},
 			{"RAM_DRIVE_PATH", std::string(romPath)},
 			{"DSI_MODE", "0"},
-			{"BOOST_CPU", "1"},
+			{"BOOST_CPU", ramDrive->boostCpu ? "1" : "0"},
 			{"BOOST_VRAM", "0"},
 		};
 	}

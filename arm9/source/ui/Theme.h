@@ -23,7 +23,13 @@ struct Theme {
 	uint16_t favorite;
 	uint16_t ndsShades[4]; // generated tiles pick one shade per game so neighbours differ
 	uint16_t gbaShades[4];
+	bool fromCover = false; // colors follow the selected game's cover (see coverTheme)
 };
+
+// The theme for a game whose cover has this accent color (a ThumbEntry accent): dark tints of the accent
+// for the background and surfaces, light text, the accent itself for selection. base supplies the rest,
+// and is returned unchanged when accent is 0 (unknown).
+Theme coverTheme(const Theme& base, uint16_t accent);
 
 // Four shades for generated tiles of system's games: the theme's own for DS and GBA, fixed mid-tones
 // (readable on any background) for the other consoles.

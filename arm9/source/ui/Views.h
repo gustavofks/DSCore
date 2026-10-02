@@ -24,6 +24,7 @@ struct BrowserState {
 	IconCache* icons = nullptr;                 // decoded icons, filled while drawing
 	ThumbCache* thumbs = nullptr;               // grid box art, filled while drawing; null to show icons
 	const Cover* cover = nullptr;               // box art of the selected game, when loaded
+	const uint16_t* backdrop = nullptr;         // blurred cover for the details screen (256x192), when built
 	bool hasSave = false;                       // the selected game has a save file
 	std::string_view query;                     // active search filter, empty when none
 	const std::vector<size_t>* view = nullptr; // indexes into library->games for the current tab
@@ -36,7 +37,7 @@ struct BrowserState {
 	ViewMode mode = ViewMode::Grid;
 };
 
-// Where each of tabs lies on the tab bar while active is selected (see layout::tabRects).
+// Where each tab chip lies while active is selected (see layout::chipRects).
 std::vector<Rect> tabBarRects(const std::vector<Tab>& tabs, Tab active);
 
 // The game's banner icon, or a tile in the system color with the title's initials, drawn as a square of
@@ -47,8 +48,16 @@ void drawGameTile(Canvas& canvas, const Theme& theme, const LibraryData& library
 // Top screen: details of the selected game.
 void drawDetailScreen(Canvas& canvas, const BrowserState& state);
 
+// Top screen: everything known about the selected game (console, region, languages, genre, size, file,
+// play history, save), opened with SELECT.
+void drawGameDetails(Canvas& canvas, const BrowserState& state);
+
 // Bottom screen: tab bar, grid or list, footer.
 void drawBrowserScreen(Canvas& canvas, const BrowserState& state);
+
+// The line under the games: position in the list, filter, page bar, sort order. drawBrowserScreen draws it;
+// call it again when the cursor moves within a page.
+void drawBrowserFooter(Canvas& canvas, const BrowserState& state);
 
 // Redraws one game of the current page (a grid cell or list row) over what drawBrowserScreen drew,
 // e.g. to move the selection without redrawing the whole screen.

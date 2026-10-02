@@ -54,12 +54,14 @@ TEST_CASE("Config round-trips and ignores invalid values") {
 	CHECK(bad.view == ViewMode::List);
 }
 
-TEST_CASE("layout covers the bottom screen with tabs and a 5x3 grid") {
-	const std::vector<Rect> tabs = layout::tabRects({18, 18, 12, 18, 36}, 0);
-	CHECK(layout::tabAt(tabs, 0, 0) == 0);
-	CHECK(layout::tabAt(tabs, 255, 19) == 4);
-	CHECK(layout::tabAt(tabs, 10, 30) == -1);
-	CHECK(tabs[0].w == tabs[1].w); // labels fit: even widths
+TEST_CASE("layout covers the bottom screen with tab chips and a 4x3 grid of cards") {
+	const std::vector<Rect> chips = layout::chipRects({18, 12, 18}, 0);
+	CHECK(chips[0].x == layout::kChipMargin);
+	CHECK(chips[1].x == chips[0].x + chips[0].w + layout::kChipGap);
+	CHECK(chips[0].w == 18 + layout::kChipPadding);
+	CHECK(layout::tabAt(chips, chips[1].x + 2, layout::kChipY + 2) == 1);
+	CHECK(layout::tabAt(chips, 250, layout::kChipY + 2) == -1); // right of the last chip
+	CHECK(layout::tabAt(chips, 10, 30) == -1);
 	const Rect first = layout::gridCellRect(0);
 	const Rect last = layout::gridCellRect(layout::kGridPerPage - 1);
 	CHECK(layout::gridSlotAt(first.x + 1, first.y + 1) == 0);
@@ -72,7 +74,7 @@ TEST_CASE("layout covers the bottom screen with tabs and a 5x3 grid") {
 TEST_CASE("grid navigation moves by item and by row, clamped") {
 	CHECK(moveCursor(0, 20, ViewMode::Grid, Move::Right) == 1);
 	CHECK(moveCursor(0, 20, ViewMode::Grid, Move::Left) == 0);
-	CHECK(moveCursor(2, 20, ViewMode::Grid, Move::Down) == 7);
+	CHECK(moveCursor(2, 20, ViewMode::Grid, Move::Down) == 6);
 	CHECK(moveCursor(17, 20, ViewMode::Grid, Move::Down) == 19);
 	CHECK(moveCursor(3, 20, ViewMode::Grid, Move::Up) == 0);
 	CHECK(moveCursor(5, 0, ViewMode::Grid, Move::Down) == 0);
@@ -87,28 +89,21 @@ TEST_CASE("list navigation moves by row and by page") {
 }
 
 TEST_CASE("pages start at multiples of the page size") {
-	CHECK(pageSize(ViewMode::Grid) == 15);
-	CHECK(pageStart(14, ViewMode::Grid) == 0);
-	CHECK(pageStart(15, ViewMode::Grid) == 15);
-	CHECK(pageStart(31, ViewMode::Grid) == 30);
+	CHECK(pageSize(ViewMode::Grid) == 12);
+	CHECK(pageStart(11, ViewMode::Grid) == 0);
+	CHECK(pageStart(12, ViewMode::Grid) == 12);
+	CHECK(pageStart(31, ViewMode::Grid) == 24);
 }
 
-TEST_CASE("tab bar shares the width, then scrolls to keep the active tab visible") {
-	// Too wide for even widths, narrow enough to fit: natural widths plus an equal share of the rest.
-	const std::vector<Rect> fit = layout::tabRects({18, 18, 12, 18, 18, 24, 36}, 0);
-	CHECK(fit.front().x == 0);
-	CHECK(fit.back().x + fit.back().w == layout::kScreenW);
-	CHECK(fit[5].w > fit[2].w);
-
-	// Too wide for the screen: the active tab is scrolled into view, the first and last stay reachable.
-	const std::vector<int> many = {18, 18, 12, 18, 12, 18, 18, 24, 18, 12, 12, 36};
-	const std::vector<Rect> start = layout::tabRects(many, 0);
-	CHECK(start.front().x == 0);
+TEST_CASE("tab chips scroll to keep the active one visible") {
+	const std::vector<int> many = {18, 18, 12, 18, 12, 18, 18, 24, 18, 12, 12, 24};
+	const std::vector<Rect> start = layout::chipRects(many, 0);
+	CHECK(start.front().x == layout::kChipMargin);
 	CHECK(start.back().x + start.back().w > layout::kScreenW);
-	const std::vector<Rect> end = layout::tabRects(many, int(many.size()) - 1);
-	CHECK(end.back().x + end.back().w == layout::kScreenW);
+	const std::vector<Rect> end = layout::chipRects(many, int(many.size()) - 1);
+	CHECK(end.back().x + end.back().w == layout::kScreenW - layout::kChipMargin);
 	for (int active = 0; active < int(many.size()); ++active) {
-		const Rect r = layout::tabRects(many, active)[size_t(active)];
+		const Rect r = layout::chipRects(many, active)[size_t(active)];
 		CHECK(r.x >= 0);
 		CHECK(r.x + r.w <= layout::kScreenW);
 	}

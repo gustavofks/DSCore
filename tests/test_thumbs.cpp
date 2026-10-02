@@ -29,8 +29,8 @@ std::vector<uint8_t> thumbsFile(const std::vector<std::string>& names, int w, in
 		put32(out, offset);
 		out.push_back(uint8_t(w));
 		out.push_back(uint8_t(h));
-		out.push_back(0);
-		out.push_back(0);
+		out.push_back(0x1F); // accent: rgb(31, 0, 0) with bit 15
+		out.push_back(0x80);
 		offset += uint32_t(w * h * 2);
 	}
 	for (size_t i = 0; i < keys.size(); ++i) {
@@ -61,6 +61,7 @@ TEST_CASE("thumbs.bin header and entries parse and are searchable") {
 	REQUIRE(b != nullptr);
 	CHECK(b->width == 30);
 	CHECK(b->height == 40);
+	CHECK(b->accent == 0x801F);
 	CHECK(findThumb(entries, thumbKey("missing.gb")) == nullptr);
 
 	std::vector<uint8_t> bad = file;
@@ -97,6 +98,9 @@ TEST_CASE("ThumbCache loads each thumbnail once and remembers failures") {
 	cache.get("sd:/roms/GB/a.gb", w, h);
 	CHECK(loads == 1);
 	CHECK(cache.get("sd:/roms/GB/none.gb", w, h) == nullptr);
+	CHECK(loads == 1);
+	CHECK(cache.accent("sd:/roms/GB/a.gb") == 0x801F); // from the index, no read
+	CHECK(cache.accent("sd:/roms/GB/none.gb") == 0);
 	CHECK(loads == 1);
 
 	failNext = true;

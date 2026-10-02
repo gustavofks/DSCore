@@ -444,3 +444,24 @@ TEST_CASE("App menu scrolls and hit-tests the rows on screen") {
 	app.handle(Action::Tap, close.x + 4, close.y + 4);
 	CHECK_FALSE(app.menuOpen());
 }
+
+TEST_CASE("App opens the details page with SELECT and closes it with SELECT or B") {
+	const LibraryData lib = library(3, 0);
+	UserData data;
+	Config config;
+	App app(lib, data, config);
+	CHECK_FALSE(app.detailsOpen());
+	app.handle(Action::Details);
+	CHECK(app.detailsOpen());
+	CHECK(app.takeSound() == Sound::Select);
+	app.handle(Action::Right); // browsing keeps the page open and follows the cursor
+	CHECK(app.detailsOpen());
+	CHECK(app.selected()->path == "sd:/roms/NDS/101.nds");
+	app.handle(Action::Back);
+	CHECK_FALSE(app.detailsOpen());
+	app.handle(Action::Details);
+	app.handle(Action::Details);
+	CHECK_FALSE(app.detailsOpen());
+	app.handle(Action::Details);
+	CHECK(app.handle(Action::Launch) == "sd:/roms/NDS/101.nds");
+}

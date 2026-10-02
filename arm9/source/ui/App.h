@@ -16,7 +16,7 @@ namespace dscore {
 enum class Sound : uint8_t { None, Move, Select, Back, Launch };
 
 enum class Action : uint8_t {
-	Up, Down, Left, Right, Launch, Back, Favorite, PrevTab, NextTab, NextFilter, Menu, Search, Tap
+	Up, Down, Left, Right, Launch, Back, Favorite, PrevTab, NextTab, NextFilter, Details, Menu, Search, Tap
 };
 
 // Library browser state and input handling, independent of the hardware: the caller feeds actions,
@@ -45,6 +45,7 @@ public:
 	void libraryChanged();
 
 	bool menuOpen() const { return menuOpen_; }
+	bool detailsOpen() const { return detailsOpen_; } // the top screen shows the details page
 
 	// Box art thumbnails for the grid (see ThumbCache).
 	void setThumbSource(std::vector<ThumbEntry> entries, ThumbCache::Loader loader);
@@ -110,6 +111,7 @@ private:
 	void setSearching(bool searching);
 
 	bool menuOpen_ = false;
+	bool detailsOpen_ = false;
 	int menuRow_ = 0;
 	MenuPage menuPage_ = MenuPage::Main;
 	uint32_t random_ = 0x2545F491; // xorshift state for "Random game"
@@ -120,6 +122,13 @@ private:
 	int keyIndex_ = 0;
 	std::string coverPath_;
 	std::optional<Cover> cover_;
+	std::vector<uint16_t> backdrop_; // blurred cover_ for the details screen
+	std::string backdropPath_;        // game backdrop_ belongs to; empty when there is none
+	void rebuildBackdrop();
+	// The theme the screens use: theme_, tinted by the selected game's cover when theme_ follows covers.
+	const Theme& currentTheme() const;
+	mutable Theme current_;
+	mutable uint16_t drawnAccent_ = 0; // accent of the bottom screen's pixels; a change redraws all of it
 	std::string savePath_; // game the save flag belongs to
 	bool hasSave_ = false;
 	// The bottom screen keeps its pixels between frames: a cursor move within the page only redraws the

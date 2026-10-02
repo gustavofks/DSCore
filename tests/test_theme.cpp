@@ -9,8 +9,35 @@ using namespace dscore;
 TEST_CASE("built-in themes start with the default and have distinct names") {
 	const auto& themes = builtInThemes();
 	REQUIRE(themes.size() >= 3);
-	CHECK(themes[0].name == "Midnight");
-	for (size_t i = 1; i < themes.size(); ++i) CHECK(themes[i].name != themes[0].name);
+	CHECK(themes[0].name == "Cover art");
+	CHECK(themes[0].fromCover);
+	for (size_t i = 1; i < themes.size(); ++i) {
+		CHECK(themes[i].name != themes[0].name);
+		CHECK_FALSE(themes[i].fromCover);
+	}
+}
+
+TEST_CASE("coverTheme tints a theme with a cover's accent color") {
+	const Theme& base = builtInThemes()[0];
+	const uint16_t red = rgb(26, 6, 4) | 0x8000;
+	const Theme t = coverTheme(base, red);
+	CHECK(t.accent == red);
+	CHECK((t.background & 31) < (red & 31));            // a dark tint of the accent
+	CHECK((t.background & 31) > ((t.background >> 10) & 31)); // still reddish
+	CHECK(t.surface != t.background);
+	CHECK(t.favorite == base.favorite);
+	CHECK(coverTheme(base, 0).accent == base.accent); // unknown accent keeps the base
+}
+
+TEST_CASE("readableOn picks dark text on light colors and white on dark ones") {
+	CHECK(readableOn(rgb(31, 31, 31)) == rgb(2, 2, 3));
+	CHECK(readableOn(rgb(28, 24, 4)) == rgb(2, 2, 3));
+	CHECK(readableOn(rgb(4, 6, 20)) == rgb(31, 31, 31));
+	CHECK(mixColor(rgb(0, 0, 0), rgb(16, 16, 16), 8) == rgb(8, 8, 8));
+}
+
+TEST_CASE("custom themes never follow covers") {
+	CHECK_FALSE(parseTheme("[colors]\naccent = #FF8000\n", builtInThemes()[0], "Mine").fromCover);
 }
 
 TEST_CASE("parseColor reads #RRGGBB into a DS color") {

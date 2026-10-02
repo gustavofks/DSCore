@@ -45,6 +45,7 @@ bool parseThumbEntries(const uint8_t* data, size_t len, uint32_t count, std::vec
 		e.offset = u32(p + 4);
 		e.width = p[8];
 		e.height = p[9];
+		e.accent = u16(p + 10);
 		if (e.width == 0 || e.height == 0 || e.width > kThumbMaxSize || e.height > kThumbMaxSize) return false;
 		if (i > 0 && entries[i - 1].key > e.key) return false;
 	}

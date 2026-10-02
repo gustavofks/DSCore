@@ -100,9 +100,11 @@ TEST_CASE("relaunchKeys boots the console's emulator with the ROM as argument") 
 	CHECK(valueOf(relaunchKeys("sd:/roms/SMS/Sonic.sms", false), "LAUNCH_TYPE") == "6");
 	CHECK(valueOf(relaunchKeys("sd:/roms/GG/Sonic.gg", false), "LAUNCH_TYPE") == "6");
 	CHECK(valueOf(relaunchKeys("sd:/roms/A26/Pitfall!.a26", false), "LAUNCH_TYPE") == "9");
-	const auto snes = relaunchKeys("sd:/roms/SNES/Super Metroid.sfc", false);
+	// With NEW_SNES_EMU_VER = 1, the ToolchainGenericDS build of SNEmulDS takes the ROM as argument.
+	const auto snes = relaunchKeys("sd:/roms/SNES/Super Metroid.sfc", false, 0, true);
 	CHECK(valueOf(snes, "LAUNCH_TYPE") == "21");
 	CHECK(valueOf(snes, "HOMEBREW_ARG") == "sd:/roms/SNES/Super Metroid.sfc"); // main.srldr makes it fat:
+	CHECK(bootstrapKeys("sd:/roms/SNES/Super Metroid.sfc", 0, true).empty());
 	CHECK(bootstrapKeys("sd:/roms/GB/Tetris.gb").empty());
 }
 
@@ -111,7 +113,8 @@ TEST_CASE("emulatorFor names the emulator each game needs") {
 	CHECK(std::string(emulatorFor("sd:/roms/NES/Metroid.nes")) == "sd:/_nds/TWiLightMenu/emulators/nestwl.nds");
 	CHECK(std::string(emulatorFor("sd:/roms/GG/Sonic.gg")) == "sd:/_nds/TWiLightMenu/emulators/S8DS.nds");
 	CHECK(std::string(emulatorFor("sd:/roms/A26/Pitfall!.a26")) == "sd:/_nds/TWiLightMenu/emulators/StellaDS.nds");
-	CHECK(std::string(emulatorFor("sd:/roms/SNES/Mario.sfc")) == "sd:/_nds/TWiLightMenu/emulators/SNEmulDS.srl");
+	CHECK(std::string(emulatorFor("sd:/roms/SNES/Mario.sfc")) == "sd:/_nds/TWiLightMenu/emulators/SNEmulDS-legacy.nds");
+	CHECK(std::string(emulatorFor("sd:/roms/SNES/Mario.sfc", 0, true)) == "sd:/_nds/TWiLightMenu/emulators/SNEmulDS.srl");
 	CHECK(std::string(emulatorFor("sd:/roms/GBA/Metroid.gba")) == "sd:/_nds/GBARunner2_arm7dldi_dsi.nds");
 	CHECK(std::string(emulatorFor("sd:/roms/MD/Sonic.gen", 512 * 1024)) == "sd:/_nds/TWiLightMenu/emulators/jEnesisDS.nds");
 	CHECK(std::string(emulatorFor("sd:/roms/MD/SF2.gen", 5 * 1024 * 1024)) ==
@@ -130,6 +133,20 @@ TEST_CASE(".gen games up to 3 MB run in jEnesisDS from a RAM drive") {
 	CHECK(valueOf(bootstrap, "HOMEBREW_ARG") == "fat:/ROM.BIN");
 	CHECK(valueOf(bootstrap, "RAM_DRIVE_PATH") == "sd:/roms/MD/Sonic.GEN");
 	CHECK(temporaryKeys("sd:/roms/MD/Sonic.gen", kJenesisMaxSize).empty());
+}
+
+TEST_CASE("SNES games run in SNEmulDS-legacy from a RAM drive, TWiLight's default") {
+	// NEW_SNES_EMU_VER = 0: nds-bootstrap-hb loads the ROM as fat:/ROM.SMC, without the CPU boost.
+	const auto keys = relaunchKeys("sd:/roms/SNES/Super Mario Kart (USA).sfc", false, 512 * 1024);
+	CHECK(valueOf(keys, "LAUNCH_TYPE") == "1");
+	CHECK(valueOf(keys, "HOMEBREW_BOOTSTRAP") == "1");
+	CHECK(valueOf(keys, "HOMEBREW_ARG") == "");
+	const auto bootstrap = bootstrapKeys("sd:/roms/SNES/Super Mario Kart (USA).sfc", 512 * 1024);
+	CHECK(valueOf(bootstrap, "NDS_PATH") == "sd:/_nds/TWiLightMenu/emulators/SNEmulDS-legacy.nds");
+	CHECK(valueOf(bootstrap, "HOMEBREW_ARG") == "fat:/ROM.SMC");
+	CHECK(valueOf(bootstrap, "RAM_DRIVE_PATH") == "sd:/roms/SNES/Super Mario Kart (USA).sfc");
+	CHECK(valueOf(bootstrap, "BOOST_CPU") == "0");
+	CHECK(valueOf(bootstrap, "DSI_MODE") == "0");
 }
 
 TEST_CASE(".md games run in PicoDriveTWL at any size") {

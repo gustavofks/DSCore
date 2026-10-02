@@ -40,6 +40,35 @@ TEST_CASE("strokeRect draws only the border") {
 	CHECK(t.canvas.pixel(2, 2) == 0);
 }
 
+TEST_CASE("fillRounded leaves the corners and fills the middle") {
+	TestCanvas t(20, 12);
+	t.canvas.fillRounded({0, 0, 20, 12}, 4, 5);
+	CHECK(t.canvas.pixel(0, 0) == 0);   // corner cut
+	CHECK(t.canvas.pixel(19, 11) == 0);
+	CHECK(t.canvas.pixel(10, 0) == 5);  // straight edge
+	CHECK(t.canvas.pixel(0, 6) == 5);
+	CHECK(t.canvas.pixel(10, 6) == 5);
+}
+
+TEST_CASE("roundCorners paints only the corner pixels") {
+	TestCanvas t(10, 10);
+	t.canvas.fillRect({0, 0, 10, 10}, 3);
+	t.canvas.roundCorners({0, 0, 10, 10}, 8);
+	CHECK(t.canvas.pixel(0, 0) == 8);
+	CHECK(t.canvas.pixel(2, 0) == 8);
+	CHECK(t.canvas.pixel(3, 0) == 3);
+	CHECK(t.canvas.pixel(9, 9) == 8);
+	CHECK(t.canvas.pixel(5, 5) == 3);
+}
+
+TEST_CASE("blendRect mixes pixels towards a color") {
+	TestCanvas t(4, 4);
+	t.canvas.fillRect({0, 0, 4, 4}, rgb(16, 16, 16));
+	t.canvas.blendRect({0, 0, 2, 4}, rgb(0, 0, 0), 8);
+	CHECK(t.canvas.pixel(0, 0) == rgb(8, 8, 8));
+	CHECK(t.canvas.pixel(3, 0) == rgb(16, 16, 16));
+}
+
 TEST_CASE("blit skips transparent pixels and scales") {
 	TestCanvas t(4, 4);
 	const uint16_t image[4] = {0x801F, 0x0000, 0x0000, 0x83E0}; // 2x2: red, clear / clear, green

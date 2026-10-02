@@ -98,6 +98,18 @@ uint32_t fileSizeOf(const std::string& path) {
 	return stat(path.c_str(), &st) == 0 && st.st_size > 0 ? uint32_t(st.st_size) : 0;
 }
 
+// True when settings.ini's [SRLOADER] key is a non-zero number; TWiLight's default is off.
+bool settingIsOn(const char* wanted) {
+	std::string ini;
+	if (!readFile(kSettingsPath, ini)) return false;
+	bool on = false;
+	forEachIniEntry(ini, [&](std::string_view section, std::string_view key, std::string_view value) {
+		uint32_t number = 0;
+		if (section == "SRLOADER" && key == wanted && parseIniUint(value, number)) on = number != 0;
+	});
+	return on;
+}
+
 // Saves the current values of keys (settings.ini, [SRLOADER]) so restoreTwilightSettings() can put them
 // back. A restore file left by an earlier launch already holds the user's values and is kept.
 bool rememberSettings(const std::vector<std::string>& keys) {
@@ -133,10 +145,11 @@ LaunchError launchViaTwilight(const std::string& romPath, int* loaderCode) {
 	bool homebrew = false;
 	if (!detectHomebrew(romPath, homebrew)) return LaunchError::RomRead;
 	const uint32_t romSize = fileSizeOf(romPath);
-	const std::vector<IniKey> keys = relaunchKeys(romPath, homebrew, romSize);
+	const bool newSnes = settingIsOn("NEW_SNES_EMU_VER");
+	const std::vector<IniKey> keys = relaunchKeys(romPath, homebrew, romSize, newSnes);
 	if (keys.empty()) return LaunchError::Unsupported;
 	// Without its emulator, main.srldr would fall back to a flashcard path and fail after DSCore has quit.
-	const char* emulator = emulatorFor(romPath, romSize);
+	const char* emulator = emulatorFor(romPath, romSize, newSnes);
 	if (emulator && !fileExists(emulator)) return LaunchError::EmulatorMissing;
 
 	bool rset = false;
@@ -145,7 +158,7 @@ LaunchError launchViaTwilight(const std::string& romPath, int* loaderCode) {
 	if (!fileExists(kSettingsPath)) return LaunchError::SettingsRead;
 	if (!rememberSettings(temporaryKeys(romPath, romSize))) return LaunchError::SettingsWrite;
 	if (!patchIniFile(kSettingsPath, kSettingsBackup, "SRLOADER", keys)) return LaunchError::SettingsWrite;
-	const std::vector<IniKey> bootstrap = bootstrapKeys(romPath, romSize);
+	const std::vector<IniKey> bootstrap = bootstrapKeys(romPath, romSize, newSnes);
 	if (!bootstrap.empty() && !patchIniFile(kBootstrapPath, kBootstrapBackup, "NDS-BOOTSTRAP", bootstrap)) {
 		return LaunchError::SettingsWrite;
 	}

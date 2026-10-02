@@ -10,7 +10,7 @@ namespace dscore {
 // thumbs.bin holds the small box art the grid shows, written by tools/fetch_covers.py:
 //   header: "DSTH", version (u16), reserved (u16), entry count (u32)
 //   entries, sorted by key: key (u32), pixel offset from the start of the file (u32), width (u8),
-//   height (u8), reserved (u16)
+//   height (u8), accent color of the cover (u16, a DS color with bit 15 set; 0 in older files)
 //   pixels: width * height DS colors (u16, bit 15 set) per thumbnail
 // All numbers are little-endian.
 
@@ -23,6 +23,7 @@ struct ThumbEntry {
 	uint32_t offset = 0;
 	uint8_t width = 0;
 	uint8_t height = 0;
+	uint16_t accent = 0; // 0 when the file has no accent colors
 };
 
 // Key of a game's thumbnail: FNV-1a of the ROM file name without folders (e.g. "Metroid (USA).nes").

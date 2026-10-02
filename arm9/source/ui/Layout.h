@@ -14,17 +14,22 @@ namespace layout {
 constexpr int kScreenW = 256;
 constexpr int kScreenH = 192;
 
-// Bottom screen: tab bar, then the grid or the list, then a footer.
-constexpr int kTabBarH = 20;
-constexpr int kTabPadding = 12; // around a label that sets its tab width
+// Bottom screen: a row of tab chips, then the cards or the list, then a footer.
+constexpr int kTabBarH = 24;
+constexpr int kChipY = 4;
+constexpr int kChipH = 16;
+constexpr int kChipPadding = 14; // around a chip's label
+constexpr int kChipGap = 5;
+constexpr int kChipMargin = 6;
 constexpr int kFooterH = 16;
 constexpr int kContentY = kTabBarH + 2;
 constexpr int kContentH = kScreenH - kFooterH - kContentY;
 
-constexpr int kGridCols = 5;
+constexpr int kGridCols = 4;
 constexpr int kGridRows = 3;
-constexpr int kCellW = kScreenW / kGridCols; // 51
-constexpr int kCellH = kContentH / kGridRows;
+constexpr int kGridMarginX = 4;
+constexpr int kCellW = (kScreenW - 2 * kGridMarginX) / kGridCols; // 62
+constexpr int kCellH = kContentH / kGridRows;                     // 50
 constexpr int kGridPerPage = kGridCols * kGridRows;
 
 constexpr int kListRowH = 16;
@@ -35,10 +40,9 @@ constexpr int kMenuTop = 24;
 constexpr int kMenuRowH = 20;
 constexpr int kMenuVisibleRows = (kScreenH - kFooterH - kMenuTop) / kMenuRowH;
 
-// Tab bar for labels of the given widths in pixels. Tabs share the screen width evenly when every label
-// fits that; otherwise each gets its label width plus padding, and when even that is too wide the bar
-// scrolls to keep the active tab in view (rects may then lie partly or wholly off screen).
-std::vector<Rect> tabRects(const std::vector<int>& labelWidths, int active);
+// Tab chips for labels of the given widths in pixels, left to right. When they do not fit, the row
+// scrolls to keep the active chip in view (rects may then lie partly or wholly off screen).
+std::vector<Rect> chipRects(const std::vector<int>& labelWidths, int active);
 // First menu row on screen: the list scrolls to keep selected in view.
 int menuFirstRow(int selected, int rows);
 Rect menuRowRect(int slot); // slot 0..kMenuVisibleRows-1 on screen
