@@ -45,11 +45,11 @@ removed.
 | A | Play |
 | X | Search |
 | Y | Add to / remove from favorites |
-| B | Clear the search |
+| B | Close the details page; clear the search |
 | L / R | Previous / next tab |
-| SELECT | Next filter |
+| SELECT | Details page of the selected game (region, languages, size, file, play history, save) |
 | START | Options: filter, genre, sort order, view, grid art, theme, sounds, consoles, random game, rebuild library |
-| Touch | Tap a game to select it, tap it again to play; tap a tab to open it; tap the filter or the sort order at the bottom to change it |
+| Touch | Tap a game to select it, tap it again to play; tap a tab to open it; tap the left or right end of the bottom line to change the filter or the sort order |
 | Power button | Return to the system menu |
 
 While searching, the D-pad and A (or touch) type on the keyboard, B deletes and START finishes.

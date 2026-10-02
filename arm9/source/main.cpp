@@ -115,7 +115,7 @@ std::string handleInput(App& app) {
 	if (down & KEY_Y) apply(Action::Favorite);
 	if (down & KEY_L) apply(Action::PrevTab);
 	if (down & KEY_R) apply(Action::NextTab);
-	if (down & KEY_SELECT) apply(Action::NextFilter);
+	if (down & KEY_SELECT) apply(Action::Details);
 	if (down & KEY_START) apply(Action::Menu);
 	if (down & KEY_TOUCH) {
 		touchPosition touch;

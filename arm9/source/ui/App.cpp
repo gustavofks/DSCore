@@ -39,6 +39,12 @@ std::string App::handle(Action action, int touchX, int touchY) {
 			if (!currentPath.empty() && current) sound_ = Sound::Launch;
 			return current ? currentPath : std::string();
 		case Action::Back:
+			if (detailsOpen_) { // B closes the details page first
+				detailsOpen_ = false;
+				sound_ = Sound::Back;
+				redraw_ = true;
+				break;
+			}
 			if (query_.empty()) break;
 			query_.clear(); // B leaves the search results
 			sound_ = Sound::Back;
@@ -60,6 +66,11 @@ std::string App::handle(Action action, int touchX, int touchY) {
 			break;
 		case Action::NextFilter:
 			setFilter(stepFilter(config_.filter, 1), currentPath);
+			break;
+		case Action::Details:
+			detailsOpen_ = !detailsOpen_;
+			sound_ = detailsOpen_ ? Sound::Select : Sound::Back;
+			redraw_ = true;
 			break;
 		case Action::Menu:
 			setMenuOpen(true);
@@ -92,6 +103,7 @@ std::string App::handle(Action action, int touchX, int touchY) {
 
 void App::drawTop(Canvas& canvas) const {
 	if (searching_) drawSearchScreen(canvas, state());
+	else if (detailsOpen_) drawGameDetails(canvas, state());
 	else drawDetailScreen(canvas, state());
 }
 

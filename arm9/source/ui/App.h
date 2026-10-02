@@ -16,7 +16,7 @@ namespace dscore {
 enum class Sound : uint8_t { None, Move, Select, Back, Launch };
 
 enum class Action : uint8_t {
-	Up, Down, Left, Right, Launch, Back, Favorite, PrevTab, NextTab, NextFilter, Menu, Search, Tap
+	Up, Down, Left, Right, Launch, Back, Favorite, PrevTab, NextTab, NextFilter, Details, Menu, Search, Tap
 };
 
 // Library browser state and input handling, independent of the hardware: the caller feeds actions,
@@ -45,6 +45,7 @@ public:
 	void libraryChanged();
 
 	bool menuOpen() const { return menuOpen_; }
+	bool detailsOpen() const { return detailsOpen_; } // the top screen shows the details page
 
 	// Box art thumbnails for the grid (see ThumbCache).
 	void setThumbSource(std::vector<ThumbEntry> entries, ThumbCache::Loader loader);
@@ -110,6 +111,7 @@ private:
 	void setSearching(bool searching);
 
 	bool menuOpen_ = false;
+	bool detailsOpen_ = false;
 	int menuRow_ = 0;
 	MenuPage menuPage_ = MenuPage::Main;
 	uint32_t random_ = 0x2545F491; // xorshift state for "Random game"

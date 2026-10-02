@@ -5,6 +5,7 @@
 #include "core/RomMedia.h"
 #include "core/Version.h"
 #include "core/Text.h"
+#include "core/Titles.h"
 #include "ui/Backdrop.h"
 #include "ui/Keyboard.h"
 #include "ui/Layout.h"
@@ -73,6 +74,16 @@ bool isFavorite(const BrowserState& state, const GameEntry& game) {
 	return stats && stats->favorite;
 }
 
+std::string sizeText(uint32_t bytes) {
+	if (bytes >= (1u << 20)) return std::to_string(bytes >> 20) + " MB";
+	return std::to_string(bytes >> 10) + " KB";
+}
+
+std::string fileName(const std::string& path) {
+	const size_t slash = path.find_last_of('/');
+	return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
 uint16_t tileColor(const Theme& theme, const GameEntry& game) {
 	uint32_t hash = 2166136261u;
 	for (char c : game.title) hash = (hash ^ uint8_t(c)) * 16777619u;
@@ -102,14 +113,19 @@ void drawFooter(Canvas& canvas, const BrowserState& state) {
 	if (!state.genre.empty()) scope += (scope.empty() ? "" : " \xC2\xB7 ") + std::string(state.genre);
 	const std::string sort = state.sort == SortKey::Name ? std::string() : sortKeyLabel(state.sort);
 	const int sortW = sort.empty() ? 0 : textWidth(smallFont(), sort);
-	if (!scope.empty()) canvas.drawText(smallFont(), 6, textY, ellipsize(smallFont(), scope, kScreenW / 2 - 12), theme.accent);
+	if (!scope.empty()) canvas.drawText(smallFont(), 6, textY, ellipsize(smallFont(), scope, kScreenW / 2 - 66), theme.accent);
 	if (!sort.empty()) canvas.drawText(smallFont(), kScreenW - 6 - sortW, textY, sort, theme.muted);
 
+	// Page number, then the page bar, centred together.
 	const size_t count = state.view->size(), size = pageSize(state.mode);
 	const int pages = count == 0 ? 1 : int((count + size - 1) / size);
+	const int page = count == 0 ? 0 : int(pageStart(state.cursor, state.mode) / size);
+	const std::string number = std::to_string(page + 1) + "/" + std::to_string(pages);
+	const int numberW = textWidth(smallFont(), number), trackW = pages > 1 ? 60 : 0;
+	const int groupX = (kScreenW - numberW - (trackW ? trackW + 6 : 0)) / 2;
+	canvas.drawText(smallFont(), groupX, textY, number, theme.muted);
 	if (pages > 1) {
-		const Rect track = {kScreenW / 2 - 30, kHintBarY + kFooterH / 2 - 1, 60, 2};
-		const int page = int(pageStart(state.cursor, state.mode) / size);
+		const Rect track = {groupX + numberW + 6, kHintBarY + kFooterH / 2 - 1, trackW, 2};
 		const int segment = std::max(4, track.w / pages);
 		canvas.fillRect(track, theme.surface);
 		canvas.fillRect({track.x + page * (track.w - segment) / (pages - 1), track.y, segment, track.h}, theme.muted);
@@ -258,8 +274,72 @@ void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 
 	canvas.blendRect({0, kHintBarY, kScreenW, kFooterH}, rgb(0, 0, 0), 12);
 	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH},
-		state.query.empty() ? "A:Play X:Find Y:Fav START:Menu SEL:Filter" : "A:Play X:Find B:Clear search Y:Fav",
+		state.query.empty() ? "A:Play X:Find Y:Fav SEL:Details START:Menu" : "A:Play X:Find B:Clear search Y:Fav",
 		rgb(17, 18, 21));
+}
+
+void drawGameDetails(Canvas& canvas, const BrowserState& state) {
+	const Theme& theme = *state.theme;
+	canvas.fill(theme.background);
+	const GameEntry* game = selectedGame(state);
+	if (!game) {
+		drawCentered(canvas, largeFont(), {0, 80, kScreenW, 20}, "No game selected", theme.text);
+	} else {
+		// Small cover and the name.
+		const Rect art = {8, 8, 56, 56};
+		canvas.fillRounded(art, kCardRadius, theme.surface);
+		int thumbW = 0, thumbH = 0;
+		const uint16_t* thumb = state.thumbs ? state.thumbs->get(game->path, thumbW, thumbH) : nullptr;
+		if (thumb) {
+			const Rect frame = {art.x + (art.w - thumbW) / 2, art.y + (art.h - thumbH) / 2, thumbW, thumbH};
+			canvas.blit(thumb, thumbW, thumbH, frame.x, frame.y);
+			canvas.roundCorners(frame, theme.surface);
+		} else {
+			drawGameTile(canvas, theme, *state.library, *state.icons, *game, art.x + 12, art.y + 12, kIconSize);
+		}
+		const int textX = art.x + art.w + 8, textW = kScreenW - textX - 8;
+		int y = art.y + 2;
+		for (const std::string& line : wrapText(largeFont(), game->title, textW, 2)) {
+			canvas.drawText(largeFont(), textX, y, line, theme.text);
+			y += largeFont().height;
+		}
+		const std::string& maker = game->publisher.empty() ? game->developer : game->publisher;
+		if (!maker.empty()) canvas.drawText(smallFont(), textX, y + 3, ellipsize(smallFont(), maker, textW), theme.muted);
+
+		// One label and value per row.
+		const FileTags tags = parseFileTags(game->path);
+		std::string origin = tags.region;
+		if (!tags.languages.empty()) origin += (origin.empty() ? "" : " \xC2\xB7 ") + tags.languages;
+		std::string kind = game->genre;
+		if (game->year) kind += (kind.empty() ? "" : " \xC2\xB7 ") + std::to_string(game->year);
+		if (game->players > 1) kind += (kind.empty() ? "" : " \xC2\xB7 ") + std::string("1-") + std::to_string(game->players) + " players";
+		std::string size = sizeText(game->fileSize);
+		if (!game->gameCode.empty()) size += " \xC2\xB7 " + game->gameCode;
+		const GameStats* stats = state.userData->find(game->path);
+		std::string played = !stats || stats->timesPlayed == 0 ? "Never"
+		                     : stats->timesPlayed == 1             ? "Once"
+		                                                           : std::to_string(stats->timesPlayed) + " times";
+		if (stats && stats->lastPlayed >= 1000000000) played += " \xC2\xB7 last " + formatDate(stats->lastPlayed);
+		const std::pair<const char*, std::string> rows[] = {
+			{"Console", systemInfo(game->system).name},
+			{"Region", origin.empty() ? "-" : origin},
+			{"Genre", kind.empty() ? "-" : kind},
+			{"Size", size},
+			{"File", fileName(game->path)},
+			{"Played", played},
+			{"Save", state.hasSave ? "Yes" : "No"},
+		};
+		y = art.y + art.h + 10;
+		const int labelW = 52;
+		for (const auto& [label, value] : rows) {
+			canvas.drawText(smallFont(), 10, y, label, theme.muted);
+			canvas.drawText(smallFont(), 10 + labelW, y, ellipsize(smallFont(), value, kScreenW - 20 - labelW), theme.text);
+			y += smallFont().height + 2;
+		}
+		if (game->portuguese) drawBadge(canvas, kScreenW - 44, art.y + art.h - 12, "PT-BR", kBadgeGreen, kBadgeYellow);
+	}
+	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.surface);
+	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH}, "A:Play SEL/B:Close", theme.muted);
 }
 
 void drawBrowserScreen(Canvas& canvas, const BrowserState& state) {

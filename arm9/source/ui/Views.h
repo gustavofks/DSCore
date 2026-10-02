@@ -48,6 +48,10 @@ void drawGameTile(Canvas& canvas, const Theme& theme, const LibraryData& library
 // Top screen: details of the selected game.
 void drawDetailScreen(Canvas& canvas, const BrowserState& state);
 
+// Top screen: everything known about the selected game (console, region, languages, genre, size, file,
+// play history, save), opened with SELECT.
+void drawGameDetails(Canvas& canvas, const BrowserState& state);
+
 // Bottom screen: tab bar, grid or list, footer.
 void drawBrowserScreen(Canvas& canvas, const BrowserState& state);
 
