@@ -101,9 +101,12 @@ void drawChips(Canvas& canvas, const Theme& theme, const std::vector<Tab>& tabs,
 	}
 }
 
-// Page as a thin bar; the filter, genre or search on the left and the sort order on the right only when
-// they are not the defaults (touching either side still cycles them, see layout::footer*Rect).
-void drawFooter(Canvas& canvas, const BrowserState& state) {
+} // namespace
+
+// Position in the list on the left (e.g. 27/361), then the filter, genre or search when there is one; the
+// page as a thin bar in the middle; the sort order on the right unless it is by name. Touching either end
+// cycles the filter or the sort order (see layout::footer*Rect).
+void drawBrowserFooter(Canvas& canvas, const BrowserState& state) {
 	const Theme& theme = *state.theme;
 	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.background);
 	const int textY = kHintBarY + (kFooterH - smallFont().height) / 2;
@@ -113,24 +116,27 @@ void drawFooter(Canvas& canvas, const BrowserState& state) {
 	if (!state.genre.empty()) scope += (scope.empty() ? "" : " \xC2\xB7 ") + std::string(state.genre);
 	const std::string sort = state.sort == SortKey::Name ? std::string() : sortKeyLabel(state.sort);
 	const int sortW = sort.empty() ? 0 : textWidth(smallFont(), sort);
-	if (!scope.empty()) canvas.drawText(smallFont(), 6, textY, ellipsize(smallFont(), scope, kScreenW / 2 - 66), theme.accent);
+	const size_t count = state.view->size(), size = pageSize(state.mode);
+	const Rect track = {kScreenW / 2 - 30, kHintBarY + kFooterH / 2 - 1, 60, 2};
+
+	const std::string position = count == 0 ? "0/0" : std::to_string(state.cursor + 1) + "/" + std::to_string(count);
+	const int positionW = canvas.drawText(smallFont(), 6, textY, position, theme.muted);
+	if (!scope.empty()) {
+		const int x = 6 + positionW + 8;
+		canvas.drawText(smallFont(), x, textY, ellipsize(smallFont(), scope, track.x - 6 - x), theme.accent);
+	}
 	if (!sort.empty()) canvas.drawText(smallFont(), kScreenW - 6 - sortW, textY, sort, theme.muted);
 
-	// Page number, then the page bar, centred together.
-	const size_t count = state.view->size(), size = pageSize(state.mode);
 	const int pages = count == 0 ? 1 : int((count + size - 1) / size);
-	const int page = count == 0 ? 0 : int(pageStart(state.cursor, state.mode) / size);
-	const std::string number = std::to_string(page + 1) + "/" + std::to_string(pages);
-	const int numberW = textWidth(smallFont(), number), trackW = pages > 1 ? 60 : 0;
-	const int groupX = (kScreenW - numberW - (trackW ? trackW + 6 : 0)) / 2;
-	canvas.drawText(smallFont(), groupX, textY, number, theme.muted);
 	if (pages > 1) {
-		const Rect track = {groupX + numberW + 6, kHintBarY + kFooterH / 2 - 1, trackW, 2};
+		const int page = int(pageStart(state.cursor, state.mode) / size);
 		const int segment = std::max(4, track.w / pages);
 		canvas.fillRect(track, theme.surface);
 		canvas.fillRect({track.x + page * (track.w - segment) / (pages - 1), track.y, segment, track.h}, theme.muted);
 	}
 }
+
+namespace {
 
 void drawGridCell(Canvas& canvas, const BrowserState& state, size_t index) {
 	const Theme& theme = *state.theme;
@@ -353,7 +359,7 @@ void drawBrowserScreen(Canvas& canvas, const BrowserState& state) {
 		const size_t last = std::min(state.view->size(), first + pageSize(state.mode));
 		for (size_t index = first; index < last; ++index) drawBrowserItem(canvas, state, index);
 	}
-	drawFooter(canvas, state);
+	drawBrowserFooter(canvas, state);
 }
 
 void drawBrowserItem(Canvas& canvas, const BrowserState& state, size_t index) {

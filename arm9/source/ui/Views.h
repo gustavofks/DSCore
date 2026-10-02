@@ -55,6 +55,10 @@ void drawGameDetails(Canvas& canvas, const BrowserState& state);
 // Bottom screen: tab bar, grid or list, footer.
 void drawBrowserScreen(Canvas& canvas, const BrowserState& state);
 
+// The line under the games: position in the list, filter, page bar, sort order. drawBrowserScreen draws it;
+// call it again when the cursor moves within a page.
+void drawBrowserFooter(Canvas& canvas, const BrowserState& state);
+
 // Redraws one game of the current page (a grid cell or list row) over what drawBrowserScreen drew,
 // e.g. to move the selection without redrawing the whole screen.
 void drawBrowserItem(Canvas& canvas, const BrowserState& state, size_t index);

@@ -131,6 +131,7 @@ void App::drawBottom(Canvas& canvas) const {
 		if (drawnCursor_ != cursor_) {
 			drawBrowserItem(canvas, s, drawnCursor_);
 			drawBrowserItem(canvas, s, cursor_);
+			drawBrowserFooter(canvas, s); // the position changed
 		}
 	} else {
 		if (bottomValid_) bottomTransition_ = true; // replacing a page the user was looking at
