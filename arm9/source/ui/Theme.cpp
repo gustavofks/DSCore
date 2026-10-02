@@ -36,6 +36,10 @@ const uint16_t* tileShades(const Theme& theme, System system) {
 
 const std::vector<Theme>& builtInThemes() {
 	static const std::vector<Theme> themes = {
+		// Midnight's colors until a cover gives the accent.
+		{"Cover art", rgb(2, 3, 5), rgb(5, 6, 9), rgb(8, 10, 14), rgb(29, 29, 30), rgb(16, 17, 20), rgb(9, 19, 31),
+			rgb(31, 25, 6), {rgb(21, 7, 8), rgb(18, 9, 5), rgb(22, 10, 13), rgb(16, 6, 10)},
+			{rgb(13, 9, 23), rgb(9, 10, 24), rgb(16, 8, 20), rgb(8, 13, 21)}, true},
 		{"Midnight", rgb(2, 3, 5), rgb(5, 6, 9), rgb(8, 10, 14), rgb(29, 29, 30), rgb(16, 17, 20), rgb(9, 19, 31),
 			rgb(31, 25, 6), {rgb(21, 7, 8), rgb(18, 9, 5), rgb(22, 10, 13), rgb(16, 6, 10)},
 			{rgb(13, 9, 23), rgb(9, 10, 24), rgb(16, 8, 20), rgb(8, 13, 21)}},
@@ -72,8 +76,22 @@ bool parseColor(std::string_view text, uint16_t& color) {
 	return true;
 }
 
+Theme coverTheme(const Theme& base, uint16_t accent) {
+	if (accent == 0) return base;
+	Theme theme = base;
+	const uint16_t black = rgb(0, 0, 0), white = rgb(31, 31, 31);
+	theme.background = mixColor(accent, black, 13);
+	theme.surface = mixColor(accent, black, 11);
+	theme.surfaceHigh = mixColor(accent, black, 8);
+	theme.text = rgb(30, 30, 31);
+	theme.muted = mixColor(accent, white, 8);
+	theme.accent = accent | 0x8000;
+	return theme;
+}
+
 Theme parseTheme(std::string_view ini, const Theme& base, const std::string& fallbackName) {
 	Theme theme = base;
+	theme.fromCover = false;
 	theme.name = fallbackName.empty() ? base.name : fallbackName;
 	struct Field {
 		const char* key;

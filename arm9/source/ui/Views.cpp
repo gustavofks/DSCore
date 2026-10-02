@@ -5,7 +5,7 @@
 #include "core/RomMedia.h"
 #include "core/Version.h"
 #include "core/Text.h"
-#include "core/Titles.h"
+#include "ui/Backdrop.h"
 #include "ui/Keyboard.h"
 #include "ui/Layout.h"
 #include "ui/Navigation.h"
@@ -17,8 +17,10 @@ namespace {
 using namespace layout;
 
 constexpr int kHeaderH = 16;
+constexpr int kMaxArt = 112;   // covers are fitted to 112x112 (tools/fetch_covers.py)
+constexpr int kChipRadius = 6;
+constexpr int kCardRadius = 5;
 constexpr int kHintBarY = kScreenH - kFooterH;
-constexpr uint32_t kFirstRtcTime = 1000000000; // below this, lastPlayed is an imported rank, not a date
 constexpr uint16_t kTileText = rgb(31, 31, 31); // generated tiles use mid-tone colors in every theme
 // Portuguese badge in the colors of the Brazilian flag, the same in every theme.
 constexpr uint16_t kBadgeGreen = rgb(0, 15, 6);
@@ -71,84 +73,70 @@ bool isFavorite(const BrowserState& state, const GameEntry& game) {
 	return stats && stats->favorite;
 }
 
-std::string sizeText(uint32_t bytes) {
-	if (bytes >= (1u << 20)) return std::to_string(bytes >> 20) + " MB";
-	return std::to_string(bytes >> 10) + " KB";
-}
-
 uint16_t tileColor(const Theme& theme, const GameEntry& game) {
 	uint32_t hash = 2166136261u;
 	for (char c : game.title) hash = (hash ^ uint8_t(c)) * 16777619u;
 	return tileShades(theme, game.system)[hash % 4];
 }
 
-std::string fileName(const std::string& path) {
-	const size_t slash = path.find_last_of('/');
-	return slash == std::string::npos ? path : path.substr(slash + 1);
-}
-
-std::string playedText(const GameStats* stats) {
-	if (!stats || stats->timesPlayed == 0) return "Not played yet";
-	if (stats->timesPlayed == 1) return "Played once";
-	return "Played " + std::to_string(stats->timesPlayed) + " times";
-}
-
-void drawTabs(Canvas& canvas, const Theme& theme, const std::vector<Tab>& tabs, Tab active) {
+void drawChips(Canvas& canvas, const Theme& theme, const std::vector<Tab>& tabs, Tab active) {
 	const std::vector<Rect> rects = tabBarRects(tabs, active);
 	for (size_t i = 0; i < tabs.size(); ++i) {
 		const Rect& r = rects[i];
 		if (r.x >= kScreenW || r.x + r.w <= 0) continue;
 		const bool on = tabs[i] == active;
-		canvas.fillRect({r.x + 1, r.y, r.w - 2, r.h}, on ? theme.accent : theme.surface);
-		drawCentered(canvas, smallFont(), r, tabLabel(tabs[i]), on ? theme.text : theme.muted);
-	}
-	// Arrows over the edges tell that more tabs are one L/R away.
-	if (!rects.empty() && rects.front().x < 0) {
-		canvas.fillRect({0, 0, 9, kTabBarH}, theme.background);
-		drawArrow(canvas, 2, kTabBarH / 2 - 2, -2, theme.accent);
-	}
-	if (!rects.empty() && rects.back().x + rects.back().w > kScreenW) {
-		canvas.fillRect({kScreenW - 9, 0, 9, kTabBarH}, theme.background);
-		drawArrow(canvas, kScreenW - 6, kTabBarH / 2 - 2, 2, theme.accent);
+		canvas.fillRounded(r, kChipRadius, on ? theme.accent : theme.surface);
+		drawCentered(canvas, smallFont(), r, tabLabel(tabs[i]), on ? readableOn(theme.accent) : theme.muted);
 	}
 }
 
+// Page as a thin bar; the filter, genre or search on the left and the sort order on the right only when
+// they are not the defaults (touching either side still cycles them, see layout::footer*Rect).
 void drawFooter(Canvas& canvas, const BrowserState& state) {
 	const Theme& theme = *state.theme;
-	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.surface);
-	const size_t count = state.view->size();
-	const size_t size = pageSize(state.mode);
-	const size_t pages = count == 0 ? 1 : (count + size - 1) / size;
-	const size_t page = count == 0 ? 1 : pageStart(state.cursor, state.mode) / size + 1;
+	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.background);
 	const int textY = kHintBarY + (kFooterH - smallFont().height) / 2;
-	// Filter on the left and sort order on the right: touching either cycles it (see layout::footer*Rect).
-	const std::string filter = filterLabel(state.filter);
-	canvas.drawText(smallFont(), 4, textY, filter, state.filter == Filter::All ? theme.muted : theme.accent);
-	drawCentered(canvas, smallFont(), {kScreenW * 2 / 5, kHintBarY, kScreenW / 5, kFooterH},
-		std::to_string(page) + "/" + std::to_string(pages), theme.muted);
-	const std::string sort = sortKeyLabel(state.sort);
-	canvas.drawText(smallFont(), kScreenW - 4 - textWidth(smallFont(), sort), textY, sort, theme.muted);
+	std::string scope;
+	if (!state.query.empty()) scope = "Search: " + std::string(state.query);
+	if (state.filter != Filter::All) scope += (scope.empty() ? "" : " \xC2\xB7 ") + std::string(filterLabel(state.filter));
+	if (!state.genre.empty()) scope += (scope.empty() ? "" : " \xC2\xB7 ") + std::string(state.genre);
+	const std::string sort = state.sort == SortKey::Name ? std::string() : sortKeyLabel(state.sort);
+	const int sortW = sort.empty() ? 0 : textWidth(smallFont(), sort);
+	if (!scope.empty()) canvas.drawText(smallFont(), 6, textY, ellipsize(smallFont(), scope, kScreenW / 2 - 12), theme.accent);
+	if (!sort.empty()) canvas.drawText(smallFont(), kScreenW - 6 - sortW, textY, sort, theme.muted);
+
+	const size_t count = state.view->size(), size = pageSize(state.mode);
+	const int pages = count == 0 ? 1 : int((count + size - 1) / size);
+	if (pages > 1) {
+		const Rect track = {kScreenW / 2 - 30, kHintBarY + kFooterH / 2 - 1, 60, 2};
+		const int page = int(pageStart(state.cursor, state.mode) / size);
+		const int segment = std::max(4, track.w / pages);
+		canvas.fillRect(track, theme.surface);
+		canvas.fillRect({track.x + page * (track.w - segment) / (pages - 1), track.y, segment, track.h}, theme.muted);
+	}
 }
 
 void drawGridCell(Canvas& canvas, const BrowserState& state, size_t index) {
 	const Theme& theme = *state.theme;
 	const GameEntry& game = state.library->games[(*state.view)[index]];
 	const Rect cell = gridCellRect(int(index - pageStart(index, ViewMode::Grid)));
+	const Rect card = {cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4};
+	const bool selected = index == state.cursor;
+	const uint16_t cardColor = selected ? theme.accent : theme.surface;
 	canvas.fillRect(cell, theme.background);
-	if (index == state.cursor) {
-		canvas.fillRect({cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4}, theme.surfaceHigh);
-		canvas.strokeRect({cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4}, theme.accent, 2);
-	}
+	canvas.fillRounded(card, kCardRadius, cardColor);
 	int thumbW = 0, thumbH = 0;
 	const uint16_t* thumb = state.thumbs ? state.thumbs->get(game.path, thumbW, thumbH) : nullptr;
 	if (thumb) {
-		canvas.blit(thumb, thumbW, thumbH, cell.x + (cell.w - thumbW) / 2, cell.y + (cell.h - thumbH) / 2);
+		const Rect art = {card.x + (card.w - thumbW) / 2, card.y + (card.h - thumbH) / 2, thumbW, thumbH};
+		canvas.blit(thumb, thumbW, thumbH, art.x, art.y);
+		canvas.roundCorners(art, cardColor);
 	} else {
-		drawGameTile(canvas, theme, *state.library, *state.icons, game, cell.x + (cell.w - kIconSize) / 2,
-			cell.y + (cell.h - kIconSize) / 2, kIconSize);
+		drawGameTile(canvas, theme, *state.library, *state.icons, game, card.x + (card.w - kIconSize) / 2,
+			card.y + (card.h - kIconSize) / 2, kIconSize);
 	}
-	if (isFavorite(state, game)) drawStar(canvas, cell.x + cell.w - 13, cell.y + 4, theme.favorite);
-	if (game.portuguese) drawBadge(canvas, cell.x + 3, cell.y + cell.h - smallFont().height - 4, "BR", kBadgeGreen, kBadgeYellow);
+	if (isFavorite(state, game)) drawStar(canvas, card.x + card.w - 11, card.y + 2, theme.favorite);
+	if (game.portuguese) drawBadge(canvas, card.x + 1, card.y + card.h - smallFont().height - 2, "BR", kBadgeGreen, kBadgeYellow);
 }
 
 void drawListRow(Canvas& canvas, const BrowserState& state, size_t index) {
@@ -156,9 +144,9 @@ void drawListRow(Canvas& canvas, const BrowserState& state, size_t index) {
 	const GameEntry& game = state.library->games[(*state.view)[index]];
 	const Rect r = listRowRect(int(index - pageStart(index, ViewMode::List)));
 	const bool selected = index == state.cursor;
-	canvas.fillRect(r, selected ? theme.surfaceHigh : theme.background);
-	if (selected) canvas.fillRect({r.x, r.y, 3, r.h}, theme.accent);
-	drawGameTile(canvas, theme, *state.library, *state.icons, game, 6, r.y, 16);
+	canvas.fillRect(r, theme.background);
+	if (selected) canvas.fillRounded({r.x + 2, r.y, r.w - 4, r.h}, 4, theme.surfaceHigh);
+	drawGameTile(canvas, theme, *state.library, *state.icons, game, 8, r.y, 16);
 	const bool favorite = isFavorite(state, game);
 	const int badgeW = game.portuguese ? textWidth(smallFont(), "BR") + 10 : 0;
 	const int textW = kScreenW - 28 - (favorite ? 14 : 4) - badgeW;
@@ -180,7 +168,7 @@ std::vector<Rect> tabBarRects(const std::vector<Tab>& tabs, Tab active) {
 		widths.push_back(textWidth(smallFont(), tabLabel(tabs[i])));
 		if (tabs[i] == active) activeIndex = int(i);
 	}
-	return tabRects(widths, activeIndex);
+	return chipRects(widths, activeIndex);
 }
 
 void drawGameTile(Canvas& canvas, const Theme& theme, const LibraryData& library, IconCache& icons, const GameEntry& game,
@@ -209,101 +197,75 @@ void drawGameTile(Canvas& canvas, const Theme& theme, const LibraryData& library
 
 void drawDetailScreen(Canvas& canvas, const BrowserState& state) {
 	const Theme& theme = *state.theme;
-	canvas.fill(theme.background);
-	canvas.fillRect({0, 0, kScreenW, kHeaderH}, theme.surface);
-	const int headerY = (kHeaderH - smallFont().height) / 2;
-	// Where the list comes from: tab and filter, or the search.
-	std::string where = state.tab.kind == Tab::Kind::All ? "All games" : systemInfo(state.tab.system).name;
-	if (state.filter != Filter::All) where += std::string(" \xC2\xB7 ") + filterLabel(state.filter);
-	if (!state.genre.empty()) where += " \xC2\xB7 " + std::string(state.genre);
-	if (!state.query.empty()) where = "Search: " + std::string(state.query);
 	const GameEntry* game = selectedGame(state);
-	const std::string position =
-		game ? std::to_string(state.cursor + 1) + "/" + std::to_string(state.view->size()) : std::string();
-	const int positionX = kScreenW - 4 - textWidth(smallFont(), position);
-	canvas.drawText(smallFont(), 4, headerY, ellipsize(smallFont(), where, positionX - 12), theme.accent);
-	canvas.drawText(smallFont(), positionX, headerY, position, theme.muted);
+	if (game && state.backdrop) canvas.blit(state.backdrop, kBackdropW, kBackdropH, 0, 0);
+	else canvas.fill(theme.background);
 
 	if (!game) {
-		const Rect middle = {0, kHeaderH, kScreenW, kHintBarY - kHeaderH};
+		const Rect middle = {0, 0, kScreenW, kHintBarY};
 		drawCentered(canvas, largeFont(), {middle.x, middle.y + middle.h / 2 - 20, middle.w, 20}, "No games here", theme.text);
 		drawCentered(canvas, smallFont(), {middle.x, middle.y + middle.h / 2 + 4, middle.w, 14},
-			state.filter != Filter::All ? "SELECT changes the filter"
+			state.filter != Filter::All || !state.genre.empty() ? "SELECT or START change the filter"
 			: state.tab.kind == Tab::Kind::All ? "Add ROMs under sd:/roms" : "Press L/R to change tab", theme.muted);
 	} else {
-		const Rect art = {8, kHeaderH + 6, 112, 112};
-		canvas.fillRect(art, theme.surface);
-		if (state.cover) {
-			canvas.blit(state.cover->pixels.data(), state.cover->width, state.cover->height,
-				art.x + (art.w - state.cover->width) / 2, art.y + (art.h - state.cover->height) / 2);
+		// The cover, centred with a shadow; the thumbnail doubled until it loads.
+		const Rect art = {(kScreenW - kMaxArt) / 2, 6, kMaxArt, kMaxArt};
+		int thumbW = 0, thumbH = 0;
+		const uint16_t* thumb = state.thumbs ? state.thumbs->get(game->path, thumbW, thumbH) : nullptr;
+		const int w = state.cover ? state.cover->width : thumb ? thumbW * 2 : 96;
+		const int h = state.cover ? state.cover->height : thumb ? thumbH * 2 : 96;
+		const Rect frame = {art.x + (art.w - w) / 2, art.y + (art.h - h) / 2, w, h};
+		canvas.blendRect({frame.x + 3, frame.y + 3, w, h}, rgb(0, 0, 0), 10);
+		if (state.cover) canvas.blit(state.cover->pixels.data(), w, h, frame.x, frame.y);
+		else if (thumb) canvas.blit(thumb, thumbW, thumbH, frame.x, frame.y, 2);
+		else drawGameTile(canvas, theme, *state.library, *state.icons, *game, frame.x, frame.y, 96);
+
+		// Title band: a darker strip under the cover for the name, the facts and the badges.
+		const int bandY = art.y + art.h + 4;
+		canvas.blendRect({0, bandY, kScreenW, kHintBarY - bandY}, rgb(0, 0, 0), 9);
+		int y = bandY + 3;
+		const bool oneLine = textWidth(largeFont(), game->title) <= kScreenW - 12;
+		if (oneLine) {
+			drawCentered(canvas, largeFont(), {0, y, kScreenW, largeFont().height}, game->title, rgb(31, 31, 31));
+			y += largeFont().height + 1;
 		} else {
-			drawGameTile(canvas, theme, *state.library, *state.icons, *game, art.x + 8, art.y + 8, 96);
-		}
-
-		// Title in the large font when it fits three lines, otherwise in the small one.
-		const int textX = art.x + art.w + 8;
-		const int textW = kScreenW - textX - 6;
-		const bool large = wrapText(largeFont(), game->title, textW, 4).size() <= 3;
-		const Font& titleFont = large ? largeFont() : smallFont();
-		int y = art.y + 2;
-		for (const std::string& line : wrapText(titleFont, game->title, textW, large ? 3 : 5)) {
-			canvas.drawText(titleFont, textX, y, line, theme.text);
-			y += titleFont.height + (large ? 1 : 2);
-		}
-		// Publisher from the banner, or the developer from metadata.ini; then genre, year and players.
-		const std::string& maker = game->publisher.empty() ? game->developer : game->publisher;
-		if (!maker.empty()) {
-			y += 2;
-			for (const std::string& line : wrapText(smallFont(), maker, textW, 2)) {
-				canvas.drawText(smallFont(), textX, y, line, theme.muted);
-				y += smallFont().height + 1;
+			for (const std::string& line : wrapText(smallFont(), game->title, kScreenW - 12, 2)) {
+				drawCentered(canvas, smallFont(), {0, y, kScreenW, smallFont().height}, line, rgb(31, 31, 31));
+				y += smallFont().height;
 			}
+			y += 2;
 		}
-		std::string facts = game->genre;
-		if (game->year) facts += (facts.empty() ? "" : " \xC2\xB7 ") + std::to_string(game->year);
-		if (game->players > 1) facts += (facts.empty() ? "" : " \xC2\xB7 ") + std::string("1-") + std::to_string(game->players) + "P";
-		if (!facts.empty()) {
-			canvas.drawText(smallFont(), textX, y + 1, ellipsize(smallFont(), facts, textW), theme.accent);
-			y += smallFont().height + 2;
-		}
+		std::string facts = systemInfo(game->system).name;
+		if (game->year) facts += " \xC2\xB7 " + std::to_string(game->year);
+		if (!game->genre.empty()) facts += " \xC2\xB7 " + game->genre;
+		drawCentered(canvas, smallFont(), {0, y, kScreenW, smallFont().height}, facts, rgb(22, 23, 25));
+		y += smallFont().height + 3;
 
-		// Badges: Portuguese, favorite, save file.
-		y += 5;
-		int x = textX;
-		if (game->portuguese) x = drawBadge(canvas, x, y, "PT-BR", kBadgeGreen, kBadgeYellow) + 4;
-		if (isFavorite(state, *game)) {
-			drawStar(canvas, x + 1, y + 2, theme.favorite);
-			x += 14;
+		// Badges, centred: favorite, Portuguese, save file.
+		const bool favorite = isFavorite(state, *game);
+		const int badgesW = (favorite ? 13 : 0) + (game->portuguese ? textWidth(smallFont(), "PT-BR") + 10 : 0) +
+		                    (state.hasSave ? textWidth(smallFont(), "SAVE") + 10 : 0);
+		int x = (kScreenW - badgesW) / 2;
+		if (favorite && y + 9 <= kHintBarY) {
+			drawStar(canvas, x, y + 2, theme.favorite);
+			x += 13;
 		}
-		if (state.hasSave) drawBadge(canvas, x, y, "SAVE", theme.surfaceHigh, theme.text);
-
-		// Details under the art: console and origin, file, play history.
-		const FileTags tags = parseFileTags(game->path);
-		std::string origin = systemInfo(game->system).name;
-		if (!tags.region.empty()) origin += " \xC2\xB7 " + tags.region;
-		if (!tags.languages.empty()) origin += " \xC2\xB7 " + tags.languages;
-		std::string file = sizeText(game->fileSize);
-		if (!game->gameCode.empty()) file += " \xC2\xB7 " + game->gameCode;
-		file += " \xC2\xB7 " + fileName(game->path);
-		const GameStats* stats = state.userData->find(game->path);
-		std::string played = playedText(stats);
-		if (stats && stats->lastPlayed >= kFirstRtcTime) played += " \xC2\xB7 last " + formatDate(stats->lastPlayed);
-		int lineY = art.y + art.h + 5;
-		for (const std::string& line : {origin, file, played}) {
-			canvas.drawText(smallFont(), 8, lineY, ellipsize(smallFont(), line, kScreenW - 16), theme.muted);
-			lineY += smallFont().height + 1;
+		if (y + 13 <= kHintBarY) {
+			if (game->portuguese) x = drawBadge(canvas, x, y, "PT-BR", kBadgeGreen, kBadgeYellow) + 4;
+			if (state.hasSave) drawBadge(canvas, x, y, "SAVE", rgb(6, 7, 9), rgb(28, 28, 29));
 		}
 	}
 
-	canvas.fillRect({0, kHintBarY, kScreenW, kFooterH}, theme.surface);
+	canvas.blendRect({0, kHintBarY, kScreenW, kFooterH}, rgb(0, 0, 0), 12);
 	drawCentered(canvas, smallFont(), {0, kHintBarY, kScreenW, kFooterH},
-		state.query.empty() ? "A:Play X:Find Y:Fav START:Menu SEL:Filter" : "A:Play X:Find B:Clear search Y:Fav", theme.muted);
+		state.query.empty() ? "A:Play X:Find Y:Fav START:Menu SEL:Filter" : "A:Play X:Find B:Clear search Y:Fav",
+		rgb(17, 18, 21));
 }
 
 void drawBrowserScreen(Canvas& canvas, const BrowserState& state) {
 	const Theme& theme = *state.theme;
 	canvas.fill(theme.background);
-	if (state.tabs) drawTabs(canvas, theme, *state.tabs, state.tab);
+	if (state.tabs) drawChips(canvas, theme, *state.tabs, state.tab);
 	if (state.view->empty()) {
 		drawCentered(canvas, smallFont(), {0, kContentY, kScreenW, kContentH}, "Nothing in this tab", theme.muted);
 	} else {

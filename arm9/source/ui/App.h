@@ -120,6 +120,13 @@ private:
 	int keyIndex_ = 0;
 	std::string coverPath_;
 	std::optional<Cover> cover_;
+	std::vector<uint16_t> backdrop_; // blurred cover_ for the details screen
+	std::string backdropPath_;        // game backdrop_ belongs to; empty when there is none
+	void rebuildBackdrop();
+	// The theme the screens use: theme_, tinted by the selected game's cover when theme_ follows covers.
+	const Theme& currentTheme() const;
+	mutable Theme current_;
+	mutable uint16_t drawnAccent_ = 0; // accent of the bottom screen's pixels; a change redraws all of it
 	std::string savePath_; // game the save flag belongs to
 	bool hasSave_ = false;
 	// The bottom screen keeps its pixels between frames: a cursor move within the page only redraws the

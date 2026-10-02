@@ -4,28 +4,17 @@
 
 namespace dscore::layout {
 
-std::vector<Rect> tabRects(const std::vector<int>& labelWidths, int active) {
-	const int count = int(labelWidths.size());
+std::vector<Rect> chipRects(const std::vector<int>& labelWidths, int active) {
 	std::vector<Rect> rects;
-	if (count == 0) return rects;
-	int natural = 0, widest = 0;
+	int x = kChipMargin;
 	for (int w : labelWidths) {
-		natural += w + kTabPadding;
-		widest = std::max(widest, w + kTabPadding);
+		rects.push_back({x, kChipY, w + kChipPadding, kChipH});
+		x += w + kChipPadding + kChipGap;
 	}
-	const bool even = widest * count <= kScreenW;
-	const int spare = std::max(0, kScreenW - natural);
-	int x = 0;
-	for (int i = 0; i < count; ++i) {
-		int w;
-		if (even) w = (i + 1) * kScreenW / count - i * kScreenW / count;
-		else w = labelWidths[size_t(i)] + kTabPadding + (i + 1) * spare / count - i * spare / count;
-		rects.push_back({x, 0, w, kTabBarH});
-		x += w;
-	}
-	if (x > kScreenW && active >= 0 && active < count) {
+	const int total = x - kChipGap + kChipMargin;
+	if (total > kScreenW && active >= 0 && active < int(rects.size())) {
 		const Rect& on = rects[size_t(active)];
-		const int offset = std::clamp(on.x + on.w / 2 - kScreenW / 2, 0, x - kScreenW);
+		const int offset = std::clamp(on.x + on.w / 2 - kScreenW / 2, 0, total - kScreenW);
 		for (Rect& r : rects) r.x -= offset;
 	}
 	return rects;
@@ -34,8 +23,7 @@ std::vector<Rect> tabRects(const std::vector<int>& labelWidths, int active) {
 Rect gridCellRect(int slot) {
 	const int col = slot % kGridCols;
 	const int row = slot / kGridCols;
-	const int marginX = (kScreenW - kGridCols * kCellW) / 2;
-	return {marginX + col * kCellW, kContentY + row * kCellH, kCellW, kCellH};
+	return {kGridMarginX + col * kCellW, kContentY + row * kCellH, kCellW, kCellH};
 }
 
 Rect listRowRect(int row) {

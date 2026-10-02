@@ -1,4 +1,5 @@
 #include <nds.h>
+#include <algorithm>
 #include <ctime>
 #include <set>
 #include <string>
@@ -141,15 +142,21 @@ public:
 		bool hasSave = false;
 		for (const std::string& save : saveFileCandidates(path)) hasSave = hasSave || fileExists(save);
 		app.setHasSave(path, hasSave);
+		const unsigned start = elapsedMs();
 		std::optional<Cover> cover;
 		if (!missing_.count(path)) {
 			cover = storage::loadCover(path);
 			if (!cover) missing_.insert(path);
 		}
-		app.setCover(path, std::move(cover));
+		app.setCover(path, std::move(cover)); // also builds the blurred backdrop
+		maxMs_ = std::max(maxMs_, elapsedMs() - start);
 	}
 
+	// Slowest cover load (read, decode and backdrop) since boot, for the log.
+	std::string summary() const { return "covers: max " + std::to_string(maxMs_) + " ms\n"; }
+
 private:
+	unsigned maxMs_ = 0;
 	std::string pending_;
 	std::string loaded_;
 	int restingFrames_ = 0;
@@ -255,7 +262,7 @@ int main(int argc, char** argv) {
 		const Sound sound = app.takeSound();
 		if (config.sound) sounds.play(sound);
 		if (!path.empty()) {
-			storage::appendLog(drawStats.summary());
+			storage::appendLog(drawStats.summary() + covers.summary());
 			launch(screens, userData, config, path);
 			configSaveCountdown = -1;
 			app.invalidate();

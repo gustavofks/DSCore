@@ -26,6 +26,9 @@ public:
 	// Pixels of the game's thumbnail and its size, or nullptr when it has none or it cannot be read.
 	const uint16_t* get(const std::string& romPath, int& width, int& height);
 
+	// The accent color of the game's cover (see ThumbEntry), or 0 when unknown. Reads nothing from the card.
+	uint16_t accent(const std::string& romPath) const;
+
 private:
 	struct Slot {
 		uint32_t key = 0;

@@ -21,6 +21,18 @@ constexpr uint16_t rgb(int r, int g, int b) {
 	return uint16_t(0x8000 | ((b & 31) << 10) | ((g & 31) << 5) | (r & 31));
 }
 
+// a blended towards b by t sixteenths (t = 0 gives a, 16 gives b).
+constexpr uint16_t mixColor(uint16_t a, uint16_t b, int t) {
+	return rgb(((a & 31) * (16 - t) + (b & 31) * t) / 16, (((a >> 5) & 31) * (16 - t) + ((b >> 5) & 31) * t) / 16,
+		(((a >> 10) & 31) * (16 - t) + ((b >> 10) & 31) * t) / 16);
+}
+
+// Near-black or white, whichever reads better on background.
+constexpr uint16_t readableOn(uint16_t background) {
+	const int luma = 3 * (background & 31) + 6 * ((background >> 5) & 31) + ((background >> 10) & 31); // 0..310
+	return luma > 160 ? rgb(2, 2, 3) : rgb(31, 31, 31);
+}
+
 // Software drawing into a 16-bit pixel buffer it does not own. Every call clips to the buffer.
 class Canvas {
 public:
@@ -34,6 +46,15 @@ public:
 	void fill(uint16_t color);
 	void fillRect(const Rect& r, uint16_t color);
 	void strokeRect(const Rect& r, uint16_t color, int thickness);
+
+	// Blends every pixel of r towards color by t sixteenths (see mixColor), e.g. to darken a band.
+	void blendRect(const Rect& r, uint16_t color, int t);
+
+	// fillRect with corners rounded to radius pixels.
+	void fillRounded(const Rect& r, int radius, uint16_t color);
+
+	// Paints the corners of r with background, so an image drawn in r looks rounded (radius 3).
+	void roundCorners(const Rect& r, uint16_t background);
 
 	// Copies an ARGB1555 image, skipping pixels without bit 15, with each pixel scaled to scale x scale.
 	void blit(const uint16_t* src, int srcW, int srcH, int x, int y, int scale = 1);

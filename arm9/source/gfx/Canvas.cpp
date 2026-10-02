@@ -44,6 +44,44 @@ void Canvas::strokeRect(const Rect& r, uint16_t color, int thickness) {
 	fillRect({r.x + r.w - thickness, r.y, thickness, r.h}, color);
 }
 
+DSCORE_HOT void Canvas::blendRect(const Rect& r, uint16_t color, int t) {
+	const int x0 = std::max(0, r.x), y0 = std::max(0, r.y);
+	const int x1 = std::min(width_, r.x + r.w), y1 = std::min(height_, r.y + r.h);
+	if (x0 >= x1 || y0 >= y1) return;
+	markDirty(y0, y1);
+	for (int y = y0; y < y1; ++y) {
+		uint16_t* row = pixels_ + y * width_;
+		for (int x = x0; x < x1; ++x) row[x] = mixColor(row[x], color, t);
+	}
+}
+
+void Canvas::fillRounded(const Rect& r, int radius, uint16_t color) {
+	if (radius <= 0 || r.h < 2 * radius || r.w < 2 * radius) {
+		fillRect(r, color);
+		return;
+	}
+	// Rows inside the corner arcs are inset; the middle band is one rectangle.
+	for (int row = 0; row < radius; ++row) {
+		const int dy = radius - row;
+		int inset = 0;
+		while (inset < radius && (radius - inset) * (radius - inset) + dy * dy > radius * radius + radius) ++inset;
+		fillRect({r.x + inset, r.y + row, r.w - 2 * inset, 1}, color);
+		fillRect({r.x + inset, r.y + r.h - 1 - row, r.w - 2 * inset, 1}, color);
+	}
+	fillRect({r.x, r.y + radius, r.w, r.h - 2 * radius}, color);
+}
+
+void Canvas::roundCorners(const Rect& r, uint16_t background) {
+	static constexpr int kInset[3] = {3, 1, 1};
+	for (int row = 0; row < 3; ++row) {
+		const int k = kInset[row];
+		fillRect({r.x, r.y + row, k, 1}, background);
+		fillRect({r.x + r.w - k, r.y + row, k, 1}, background);
+		fillRect({r.x, r.y + r.h - 1 - row, k, 1}, background);
+		fillRect({r.x + r.w - k, r.y + r.h - 1 - row, k, 1}, background);
+	}
+}
+
 DSCORE_HOT void Canvas::blit(const uint16_t* src, int srcW, int srcH, int x, int y, int scale) {
 	markDirty(y, y + srcH * scale);
 	const bool inside = x >= 0 && y >= 0 && x + srcW * scale <= width_ && y + srcH * scale <= height_;

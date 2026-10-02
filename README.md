@@ -33,7 +33,8 @@ removed.
   folder named `br`, and marked with a green "BR" badge.
 - Search by name with an on-screen keyboard.
 - Favorites and play history, seeded from TWiLight Menu++'s history on the first run.
-- Themes: four built in, plus your own color themes as INI files.
+- Colors taken from the selected game's cover ("Cover art", the default), four fixed themes, or your own
+  color themes as INI files. The details screen shows the cover over a blurred copy of itself.
 - Cached library: after the first indexing only new or removed files are processed.
 
 ## Controls
@@ -127,7 +128,8 @@ This only lists what would change; add `--apply` to copy. Saves it replaces are 
 
 ## Themes
 
-Pick a theme in the options menu (START). To make your own, put an INI file in
+Pick a theme in the options menu (START). "Cover art" tints both screens with the selected game's cover
+(the color comes from `tools/fetch_covers.py`, so run it once after updating). To make your own, put an INI file in
 `sd:/_nds/DSCore/themes/`; [themes/Sunset.ini](themes/Sunset.ini) shows every setting:
 
 ```ini

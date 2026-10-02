@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "core/Metadata.h"
+#include "ui/Backdrop.h"
 #include "ui/Keyboard.h"
 #include "ui/Layout.h"
 #include "ui/Navigation.h"
@@ -96,20 +97,24 @@ void App::drawTop(Canvas& canvas) const {
 
 void App::drawBottom(Canvas& canvas) const {
 	const BrowserState s = state();
+	const Theme& theme = *s.theme;
 	if (menuOpen_) {
 		if (menuPage_ == MenuPage::Main) {
-			drawMenuScreen(canvas, *theme_, "Options", menuItems(), menuRow_, "Left/Right:Change A:Select B:Close");
+			drawMenuScreen(canvas, theme, "Options", menuItems(), menuRow_, "Left/Right:Change A:Select B:Close");
 		} else {
-			drawMenuScreen(canvas, *theme_, "Consoles", menuItems(), menuRow_, "A:Show or hide the tab B:Back");
+			drawMenuScreen(canvas, theme, "Consoles", menuItems(), menuRow_, "A:Show or hide the tab B:Back");
 		}
 		bottomValid_ = false;
 		return;
 	}
 	if (searching_) {
-		drawKeyboardScreen(canvas, *theme_, keyIndex_);
+		drawKeyboardScreen(canvas, theme, keyIndex_);
 		bottomValid_ = false;
 		return;
 	}
+	// With colors from the cover, moving to another game can recolor the whole screen.
+	if (theme.accent != drawnAccent_) bottomValid_ = false;
+	drawnAccent_ = theme.accent;
 	if (bottomValid_ && pageStart(drawnCursor_, config_.view) == pageStart(cursor_, config_.view)) {
 		if (drawnCursor_ != cursor_) {
 			drawBrowserItem(canvas, s, drawnCursor_);
@@ -126,12 +131,31 @@ void App::drawBottom(Canvas& canvas) const {
 void App::setCover(const std::string& path, std::optional<Cover> cover) {
 	coverPath_ = path;
 	cover_ = std::move(cover);
+	rebuildBackdrop();
 	const GameEntry* game = selected();
 	if (game && game->path == path) redraw_ = true;
 }
 
+void App::rebuildBackdrop() {
+	backdropPath_.clear();
+	if (!cover_) return;
+	// The blur fades into the background of the theme that game is shown with.
+	const uint16_t base = theme_->fromCover ? coverTheme(*theme_, thumbs_.accent(coverPath_)).background : theme_->background;
+	backdrop_.resize(size_t(kBackdropW * kBackdropH));
+	buildBackdrop(*cover_, base, backdrop_.data());
+	backdropPath_ = coverPath_;
+}
+
+const Theme& App::currentTheme() const {
+	if (!theme_->fromCover) return *theme_;
+	const GameEntry* game = selected();
+	current_ = coverTheme(*theme_, game ? thumbs_.accent(game->path) : 0);
+	return current_;
+}
+
 void App::setThumbSource(std::vector<ThumbEntry> entries, ThumbCache::Loader loader) {
 	thumbs_.setSource(std::move(entries), std::move(loader));
+	rebuildBackdrop(); // the accent colors come with the thumbnails
 	invalidate();
 }
 
@@ -144,6 +168,7 @@ void App::setHasSave(const std::string& path, bool hasSave) {
 
 void App::setTheme(const Theme& theme) {
 	theme_ = &theme;
+	rebuildBackdrop();
 	invalidate();
 }
 
@@ -157,6 +182,7 @@ void App::libraryChanged() {
 	icons_.clear();
 	cover_.reset();
 	coverPath_.clear();
+	backdropPath_.clear();
 	rebuildView(config_.selectedPath, Missing::First);
 	invalidate();
 }
@@ -180,13 +206,14 @@ bool App::takeConfigChanged() { return std::exchange(configChanged_, false); }
 
 BrowserState App::state() const {
 	BrowserState s;
-	s.theme = theme_;
+	s.theme = &currentTheme();
 	s.library = &library_;
 	s.userData = &userData_;
 	s.icons = &icons_;
 	s.thumbs = config_.gridCovers && !thumbs_.empty() ? &thumbs_ : nullptr;
 	const GameEntry* game = selected();
 	s.cover = (cover_ && game && game->path == coverPath_) ? &*cover_ : nullptr;
+	s.backdrop = game && game->path == backdropPath_ ? backdrop_.data() : nullptr;
 	s.hasSave = hasSave_ && game && game->path == savePath_;
 	s.view = &view_;
 	s.cursor = cursor_;

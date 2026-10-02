@@ -13,7 +13,7 @@ libretro-thumbnails uses. Games of the other consoles have no game code: their C
 instead. The file name is the last resort.
 Each cover is scaled to fit 112x112 and written to _nds/DSCore/covers/<rom file name>.bin in DSCore's
 format: "DSCV", width and height (u16 LE), then width*height DS colors (u16 LE, bit 15 set).
-Every run also rebuilds _nds/DSCore/thumbs.bin, 40x40 thumbnails of all covers for the grid (format in
+Every run also rebuilds _nds/DSCore/thumbs.bin: 40x40 thumbnails and accent colors of all covers (format in
 arm9/source/core/Thumbs.h).
 Only the Python standard library is used.
 """
@@ -174,8 +174,21 @@ def fnv1a(text):
     return value
 
 
+def accent_color(pixels):
+    """The cover's dominant color as a DS color with bit 15 set: the average, weighting colorful pixels
+    over grey ones, brought to a fixed brightness. DSCore tints its screens with it."""
+    r = g = b = n = 0
+    for pr, pg, pb in pixels:
+        weight = 1 + max(pr, pg, pb) - min(pr, pg, pb)
+        r, g, b, n = r + pr * weight, g + pg * weight, b + pb * weight, n + weight
+    r, g, b = r / n, g / n, b / n
+    top = max(r, g, b, 1)
+    r5, g5, b5 = (int(c * 26 / top) for c in (r, g, b))
+    return 0x8000 | b5 << 10 | g5 << 5 | r5
+
+
 def write_thumbs(covers_dir, rom_names, target):
-    """Writes thumbs.bin with a THUMB_SIZE thumbnail of every game that has a cover."""
+    """Writes thumbs.bin with a THUMB_SIZE thumbnail and the accent color of every game that has a cover."""
     thumbs = {}
     for name in rom_names:
         cover = os.path.join(covers_dir, name + ".bin")
@@ -186,13 +199,13 @@ def write_thumbs(covers_dir, rom_names, target):
         out_w, out_h = fit(width, height, THUMB_SIZE)
         scaled = scale_box(width, height, pixels, out_w, out_h)
         body = b"".join(struct.pack("<H", 0x8000 | (b >> 3) << 10 | (g >> 3) << 5 | (r >> 3)) for r, g, b in scaled)
-        thumbs[fnv1a(name)] = (out_w, out_h, body)
+        thumbs[fnv1a(name)] = (out_w, out_h, body, accent_color(pixels))
     keys = sorted(thumbs)
     offset = 12 + 12 * len(keys)
     index, bodies = [], []
     for key in keys:
-        width, height, body = thumbs[key]
-        index.append(struct.pack("<IIBBH", key, offset, width, height, 0))
+        width, height, body, accent = thumbs[key]
+        index.append(struct.pack("<IIBBH", key, offset, width, height, accent))
         bodies.append(body)
         offset += len(body)
     with open(target, "wb") as f:
